@@ -67,7 +67,5 @@ begin
   intro h,
   have: prime 11   := by norm_num,
   have: prime 2047 := h ⟨rfl, ‹prime 11›⟩,
-  have: 23 ∣ 2047  := by norm_num,
-  have := ‹prime 2047›.2 _ ‹23 ∣ 2047›,
-  norm_num at this, trivial
+  norm_num at this
 end
