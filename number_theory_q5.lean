@@ -1,7 +1,11 @@
 import data.nat.basic
 import data.nat.prime
+import tactic.norm_num
 
 open nat
+
+-- https://www.dpmms.cam.ac.uk/study/II/NumberTheory/2019-2020/number_theory-19-1.pdf
+-- A proof of question 5 from here
 
 lemma division_lemma { a n : ℕ } ( ha : a ≥ 1 ) : a - 1 ∣ a ^ n - 1 :=
 begin
@@ -28,7 +32,7 @@ lemma pow_monotonic { a m n : ℕ } ( ha : a ≥ 2 ) ( k : a^m ≥ a^n ) : m ≥
 lemma pow_inj { a m n : ℕ } ( ha : a ≥ 2 ) ( k : a^m = a^n ) : m = n :=
   by apply le_antisymm; apply pow_monotonic ha; apply le_of_eq; rw k
 
-theorem question5 { a n : ℕ } { ha : a ≥ 2 } { hn : n ≥ 2 } : prime (a^n - 1) → a = 2 ∧ prime n := 
+lemma question5i { a n : ℕ } { ha : a ≥ 2 } { hn : n ≥ 2 } : prime (a^n - 1) → a = 2 ∧ prime n := 
 begin
   have: a ≥ 1, from le_of_succ_le ‹a ≥ 2›,
   have: n ≥ 1, from le_of_succ_le ‹n ≥ 2›,
@@ -47,15 +51,23 @@ begin
   have: a^m ≥ 1, from pow_pos ‹a ≥ 1› m,
   have: a^m - 1 ∣ a^_ - 1 := division_lemma' ‹a ≥ 1›,
   rw nat.mul_div_cancel_left' ‹m ∣ n› at this,
-  cases b.right (a^m - 1) this,
-    left,
+  apply or.imp _ _ (b.right (a^m - 1) this); intro,
     have: a^m ≤ a, 
     by calc a^m ≤ 2 : le_of_eq $ eq_add_of_sub_eq'' ‹a^m ≥ 1› ‹a^m - 1 = 1›
             ... ≤ a : ‹a ≥ 2›,
     have: m ≤ 1, apply pow_monotonic ‹a ≥ 2›, rwa nat.pow_one, 
     have: m > 0 := pos_of_dvd_of_pos ‹m ∣ n› ‹n > 0›,
     apply le_antisymm ‹m ≤ 1› ‹m > 0›,
-  right,
   have: a^m = a^n, from nat.sub_cancel ‹a^m ≥ 1› ‹a^n ≥ 1› ‹a^m - 1 = a^n - 1›, 
   exact pow_inj ‹a ≥ 2› this,
+end
+
+lemma question5ii: ¬ (∀ { a n : ℕ }, a = 2 ∧ prime n → prime (a^n - 1)) := 
+begin
+  intro h,
+  have: prime 11   := by norm_num,
+  have: prime 2047 := h ⟨rfl, ‹prime 11›⟩,
+  have: 23 ∣ 2047  := by norm_num,
+  have := ‹prime 2047›.2 _ ‹23 ∣ 2047›,
+  norm_num at this, trivial
 end
