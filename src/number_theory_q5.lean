@@ -32,7 +32,7 @@ lemma pow_monotonic { a m n : ℕ } ( ha : a ≥ 2 ) ( k : a^m ≥ a^n ) : m ≥
 lemma pow_inj { a m n : ℕ } ( ha : a ≥ 2 ) ( k : a^m = a^n ) : m = n :=
   by apply le_antisymm; apply pow_monotonic ha; apply le_of_eq; rw k
 
-lemma question5i { a n : ℕ } { ha : a ≥ 2 } { hn : n ≥ 2 } : prime (a^n - 1) → a = 2 ∧ prime n := 
+lemma question5i { a n : ℕ } { ha : a > 1 } { hn : n > 1 } : prime (a^n - 1) → a = 2 ∧ prime n := 
 begin
   have: a ≥ 1, from le_of_succ_le ‹a ≥ 2›,
   have: n ≥ 1, from le_of_succ_le ‹n ≥ 2›,
