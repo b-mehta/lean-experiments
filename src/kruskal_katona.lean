@@ -53,16 +53,12 @@ def example2 : finset (rset 3 (fin 5)) :=
 
 def stretch (A : rset r X) (s : X) (h : s ∉ A) : rset (r+1) X := 
 begin
-  refine ⟨insert s (A.1), _⟩,
+  use (insert s (A.1)),
   rw finset.mem_powerset_len,
-  cases A with a b, 
-  rw finset.mem_powerset_len at b,
-  cases b,
-  refine ⟨finset.insert_subset.2 ⟨complete _, _⟩, _⟩,
-    simpa,
+  split,
+    apply finset.subset_univ,
   rw finset.card_insert_of_not_mem h,
-  congr, 
-  rw b_right,
+  rw card_of_rset A
 end
 
 lemma mem_stretch (A : rset r X) (s : X) {h : s ∉ A} (i : X) : i ∈ stretch A s h ↔ i ∈ A ∨ i = s := 
