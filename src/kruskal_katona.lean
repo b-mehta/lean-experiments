@@ -3,6 +3,8 @@ import data.fin
 import data.rat
 import data.nat.basic
 import data.fintype
+import tactic.omega
+import tactic.linarith
 
 open fintype
 
@@ -67,16 +69,19 @@ by rw [stretch, finset.mem_insert]; tauto
 lemma stretch_subset {A : rset r X} {s : X} (h : s ∉ A) : A.1 ⊆ (stretch A s h).1 := 
 finset.subset_insert _ _
 
+lemma mem_stretch_self {A : rset r X} {s : X} (h : s ∉ A) : s ∈ stretch A s h := 
+finset.mem_insert_self _ _
+
+lemma mem_stretch_of_mem (A : rset r X) (s t : X) (p : s ∉ A) : t ∈ A → t ∈ stretch A s p := 
+finset.mem_insert_of_mem
+
 def erase (A : rset r X) (s : X) (h : s ∈ A) : rset (r-1) X :=
-begin
-  use (finset.erase (A.1) s),
-  rw finset.mem_powerset_len,
-  split,
-    apply finset.subset_univ,
-  rw finset.card_erase_of_mem h,
-  rw card_of_rset A,
-  trivial
-end
+⟨finset.erase (A.1) s, finset.mem_powerset_len.2 ⟨finset.subset_univ _, 
+  begin
+    rw finset.card_erase_of_mem h,
+    rw card_of_rset A,
+    trivial
+  end⟩⟩
 
 lemma mem_erase (A : rset r X) (s : X) (h : s ∈ A) (i : X) : i ∈ erase A s h ↔ i ∈ A ∧ i ≠ s :=
 by rw [erase, finset.mem_erase]; tauto
@@ -84,28 +89,47 @@ by rw [erase, finset.mem_erase]; tauto
 lemma subset_erase {A : rset r X} {s : X} (h : s ∈ A) : (erase A s h).1 ⊆ A.1 :=
 finset.erase_subset _ _
 
-lemma erase_iff_stretch (A : rset r X) (B : rset (r+1) X) (s : X) (H1 : s ∉ A) (H2 : s ∈ B) : B = stretch A s H1 ↔ A = erase B s H2 :=
+theorem not_mem_erase_self {A : rset r X} {s : X} (h : s ∈ A) : s ∉ erase A s h := 
+finset.not_mem_erase _ _
+
+lemma erase_iff_stretch {A : rset r X} {B : rset (r+1) X} {s : X} {H1 : s ∉ A} {H2 : s ∈ B} : stretch A s H1 = B ↔ erase B s H2 = A:=
 begin
   split; intros p; ext, 
     rw mem_erase,
     split; intro k,
-      split,
-        exact (p.symm ▸ stretch_subset ‹_› k),
-      intro, rw ‹a = s› at k, tauto,
-    rw [p, mem_stretch] at k,
-    tauto,
+      rw [← p, mem_stretch] at k,
+      tauto,
+    split,
+      exact (p ▸ stretch_subset ‹_› k),
+    intro, rw ‹a = s› at k, tauto,
   rw mem_stretch,
   split; intro x,
-    rw [p, mem_erase], 
-    by_cases (a = s),
-      right, assumption,
-    left,
-    exact ⟨‹_›, ‹_›⟩,
-  cases x,
-    rw p at x,
-    exact (subset_erase ‹_› x),
-  rwa x
+    cases x,
+      rw ← p at x,
+      exact (subset_erase ‹_› x),
+    rwa x,
+  rw [← p, mem_erase], 
+  by_cases (a = s),
+    right, assumption,
+    left, exact ⟨x, h⟩
 end
+
+lemma erase_iff_stretch' {A : rset r X} {B : rset (r+1) X} : (∃ i ∉ A, stretch A i H = B) ↔ (∃ i ∈ B, erase B i H = A) := 
+begin
+  split; rintro ⟨i, Hi, t⟩; use i; refine ⟨_, _⟩, 
+    rw ← t, apply mem_stretch_self,
+    rw ← erase_iff_stretch, 
+    exact t,
+  rw ← t, apply not_mem_erase_self,
+  rw erase_iff_stretch,
+  exact t
+end
+
+lemma erase_stretch (A : rset r X) (s : X) (h : s ∉ A) : erase (stretch A s h) s (mem_stretch_self h) = A := 
+erase_iff_stretch.1 rfl
+
+lemma stretch_erase (A : rset (r+1) X) (s : X) (h : s ∈ A) : stretch (erase A s h) s (not_mem_erase_self h) = A := 
+erase_iff_stretch.2 rfl
 
 theorem rset_card (r : ℕ) : card (rset r X) = nat.choose (card X) r := 
 begin
@@ -120,7 +144,7 @@ begin
     intro i,
     apply erase ⟨A.1, A.2⟩ i.1,
     exact i.2,
-  rintros ⟨x1, x1p⟩ ⟨x2, x2p⟩ q,
+  rintros ⟨x1, x1p⟩ ⟨_, _⟩ q,
   rw [erase, erase] at q,
   simp at q,
   congr,
@@ -141,8 +165,6 @@ by simp [shadow]
 #check rat.mk (finset.card (elems (fin 3))) 3
 #eval rat.mk (finset.card (elems (fin 3))) 4
 
--- #check example1.1
-
 def cube_graph : rel (rset r X) (rset (r+1) X) := λ A B, A.1 ⊆ B.1
 
 lemma graph_misses_elem (A : rset r X) (B : rset (r+1) X) : cube_graph A B → ∃ i, i ∈ B ∧ i ∉ A := 
@@ -158,17 +180,19 @@ end
 lemma thingy (A : finset X) (B : finset X) : A ∪ (B \ A) = A ∪ B :=
 by ext; simp [finset.mem_union, finset.mem_sdiff]; tauto
 
+#print thingy
+
 lemma thingy2 (A : finset X) (B : finset X) : A ∪ (B \ A) = B ∪ (A \ B) :=
 by rw [thingy, thingy, finset.union_comm]
 
 lemma thingy3 (A : finset X) (B : finset X) : A \ B = ∅ ↔ A ⊆ B :=
 by simp [finset.ext, finset.subset_iff]
 
-lemma thingy5 (A : finset X) : (∃ x, A = finset.singleton x) ↔ (∃! x, x ∈ A) := 
+lemma thingy5 (A : finset X) : (∃ x, A = finset.singleton x) ↔ ∃! x, x ∈ A := 
 begin
   split; rintro ⟨x, t⟩; use x,
     rw t, 
-    refine ⟨finset.mem_singleton_self _, λ i, finset.mem_singleton.1⟩, 
+    exact ⟨finset.mem_singleton_self _, λ i, finset.mem_singleton.1⟩, 
   ext, rw finset.mem_singleton, 
   exact ⟨λ r, t.right _ r, λ r, r.symm ▸ t.left⟩
 end
@@ -179,11 +203,8 @@ by rw [← thingy5, finset.card_eq_one]
 lemma test {A : rset r X} {B : rset (r+1) X} : finset.card (B.1 \ A.1) = 1 ↔ cube_graph A B := 
 begin
   rw cube_graph,
-  have : A.1 ∪ (B.1 \ A.1) = B.1 ∪ (A.1 \ B.1), 
-    rw [thingy, thingy, finset.union_comm], 
   have : finset.card A.1 + finset.card (B.1 \ A.1) = finset.card B.1 + finset.card (A.1 \ B.1),
-    rw [← finset.card_disjoint_union (finset.disjoint_sdiff), ← finset.card_disjoint_union (finset.disjoint_sdiff)], 
-    rw this,
+    rw [← finset.card_disjoint_union (finset.disjoint_sdiff), ← finset.card_disjoint_union (finset.disjoint_sdiff), thingy2], 
   rw [card_of_rset, card_of_rset] at this,
   simp at this,
   rw this,
@@ -194,7 +215,7 @@ begin
   simp [thingy3]
 end
 
-lemma stretch_iff_related (A : rset r X) (B : rset (r+1) X) : cube_graph A B ↔ ∃ (i ∉ A), stretch A i H = B := 
+lemma stretch_iff_related {A : rset r X} {B : rset (r+1) X} : cube_graph A B ↔ ∃ (i ∉ A), stretch A i H = B := 
 begin
   split, intro p,
     cases finset.card_eq_one.1 (test.2 p) with i _, use i,
@@ -212,31 +233,136 @@ begin
   apply stretch_subset
 end
 
--- lemma cube_rel {r : ℕ} (A : rset r X) (B : rset (r+1) X) : 
---   cube_graph A B ↔ ∃ (x : X) (H : x ∉ A), stretch A x H = B := 
--- begin
---   rw cube_graph, simp, rw finset.card_eq_one, split; rintro ⟨x, h⟩; use x,
---     rw finset.ext at h, simp at h,
-    
---   -- rw cube_graph, simp, rw finset.card_eq_one, split; rintro ⟨x, h⟩; use x,
---   --   rw finset.ext at h, simp at h, 
---   --   have q : x ∈ B ∧ x ∉ A := (h x).2 rfl, 
---   --   use q.2,
---   --   ext,
---   --   rw mem_stretch, 
---   --   split; intro p,
---   --     cases p,
---   --       sorry,
---   --     rw p, exact q.1,
---   --   sorry,
---   -- cases h with h m, ext t, rw [finset.mem_singleton, finset.mem_sdiff], split; intro p,
---   --   cases p, rw [← m, mem_stretch] at p_left, tauto,
---   -- rw p, refine ⟨_, h⟩,
---   -- rw ← m, rw mem_stretch, right, refl
--- end
+lemma erase_iff_related (A : rset r X) (B : rset (r+1) X) : cube_graph A B ↔ ∃ (i ∈ B), erase B i H = A := 
+iff.trans stretch_iff_related erase_iff_stretch'
 
-theorem local_lym (n : ℕ) (r : ℕ) (𝒜 : finset (rset r (fin n))) {hr1 : 1 ≤ r} {hr2 : r ≤ n} : 
-  rat.mk (finset.card 𝒜) (nat.choose n r) ≤ rat.mk (finset.card (shadow 𝒜)) (nat.choose n (r-1)) := 
+lemma sub_sub_assoc {r k n : ℕ} (h1 : k ≤ r) (h2 : r ≤ n) : n - r + k = n - (r - k) := 
+by omega
+
+lemma choose_symm {n k : ℕ} (hk : k ≤ n) : nat.choose n k = nat.choose n (n-k) :=
+calc nat.choose n k = nat.fact n / (nat.fact k * nat.fact (n - k)) : nat.choose_eq_fact_div_fact hk
+     ...            = nat.fact n / (nat.fact (n - k) * nat.fact k) : by rw mul_comm
+     ...            = nat.choose n (n-k) : by rw [nat.choose_eq_fact_div_fact (nat.sub_le _ _), nat.sub_sub_self hk]
+
+lemma nat.choose_succ_right_eq {n k : ℕ} : nat.choose n (k + 1) * (k + 1) = nat.choose n k * (n - k) :=
 begin
+  have e : (n+1) * nat.choose n k = nat.choose n k * (k+1) + nat.choose n (k+1) * (k+1),
+    rw [← nat.right_distrib, ← nat.choose_succ_succ, nat.succ_mul_choose_eq],
+  rw [← nat.sub_eq_of_eq_add e, mul_comm, ← nat.mul_sub_left_distrib],
+  simp
+end
+
+theorem div_le_div_iff {α} [linear_ordered_field α] {a b c d : α}
+  (hc : 0 < c) (hd : 0 < d) : a / c ≤ b / d ↔ a * d ≤ b * c :=
+by rw [le_div_iff hd, div_mul_eq_mul_div, div_le_iff hc]
+
+theorem main_lemma {A B n r : ℕ} (hr1 : 1 ≤ r) (hr2 : r ≤ n)
+  (h : A * r ≤ B * (n - r + 1)) :
+  (A : ℚ) / (nat.choose n r) ≤ B / nat.choose n (r-1) :=
+begin
+  rw div_le_div_iff; norm_cast,
+  apply le_of_mul_le_mul_right _,
+    exact hr1,
+  cases r,
+    simp,
+  rw nat.succ_eq_add_one at *,
+  rw [← nat.sub_add_comm hr2, nat.add_sub_add_right] at h,
+  rw [nat.add_sub_cancel, mul_assoc B, nat.choose_succ_right_eq, mul_right_comm, ← mul_assoc, mul_right_comm B], 
+  exact nat.mul_le_mul_right _ h,
+  apply nat.choose_pos hr2,
+  apply nat.choose_pos (le_trans (nat.pred_le _) hr2)
+end
+
+lemma fact_pred {r : ℕ} (h : r > 0) : nat.fact r = r * nat.fact (r-1) := 
+calc nat.fact r = nat.fact (nat.succ (r-1))       : by rw [← nat.pred_eq_sub_one, nat.succ_pred_eq_of_pos h]
+        ...     = nat.succ (r-1) * nat.fact (r-1) : nat.fact_succ _
+        ...     = r * nat.fact (r-1)              : by rw [← nat.pred_eq_sub_one, nat.succ_pred_eq_of_pos h]
+
+lemma choose_lemma {n r : ℕ} (hr1 : 1 ≤ r) (hr2 : r ≤ n) : (n - r + 1) * nat.choose n (r-1) = nat.choose n r * r :=
+begin
+  have: r - 1 ≤ n := le_trans (nat.pred_le r) ‹r ≤ n›,
+  apply nat.eq_of_mul_eq_mul_right (mul_pos (nat.fact_pos (r-1)) (nat.fact_pos (n-r))),
+  by calc (n - r + 1) * nat.choose n (r - 1) * (nat.fact (r - 1) * nat.fact (n - r))
+        = nat.choose n (r-1) * nat.fact (r-1) * ((n - r + 1) * nat.fact (n - r)) : by ac_refl
+    ... = nat.choose n (r-1) * nat.fact (r-1) * nat.fact (n - r + 1)             : by rw ← nat.fact_succ
+    ... = nat.choose n (r-1) * nat.fact (r-1) * nat.fact (n - (r - 1))           : by rw sub_sub_assoc hr1 hr2
+    ... = nat.fact n                                                             : by rw nat.choose_mul_fact_mul_fact ‹r - 1 ≤ n›
+    ... = nat.choose n r * nat.fact r * nat.fact (n - r)                         : by rw ← nat.choose_mul_fact_mul_fact ‹r ≤ n›
+    ... = nat.choose n r * (r * nat.fact (r - 1)) * nat.fact (n - r)             : by rw fact_pred ‹r ≥ 1›
+    ... = nat.choose n r * r * (nat.fact (r - 1) * nat.fact (n - r))             : by ac_refl,
+end
+
+lemma main_lemma {A B n r : ℕ} (hr1 : 1 ≤ r) (hr2 : r ≤ n) : A * r ≤ B * (n - r + 1) → (A : ℚ) / (nat.choose n r) ≤ B / nat.choose n (r-1) := 
+begin
+  intro k,
+  have: r - 1 ≤ n := le_trans (nat.pred_le r) ‹r ≤ n›,
+  have: 0 < nat.choose n (r-1) := nat.choose_pos ‹r - 1 ≤ n›,
+  have: 0 < nat.choose n r := nat.choose_pos ‹r ≤ n›,
+  rw [div_le_iff', mul_comm, div_mul_eq_mul_div, le_div_iff]; norm_cast, rotate, 
+    assumption, assumption,
+  apply le_of_mul_le_mul_right _,
+  exact hr1,
+  by calc A * nat.choose n (r - 1) * r = A * r * nat.choose n (r-1) : by ac_refl
+          ... ≤ B * (n - r + 1) * nat.choose n (r-1)                : by apply nat.mul_le_mul_right _ k
+          ... = B * nat.choose n r * r                              : by rw [mul_assoc, mul_assoc, choose_lemma hr1 hr2]
+end
+
+-- @[simp] theorem div_mk_div_cancel_left {a b c : ℤ} (c0 : c ≠ 0) : (a * c) /. (b * c) = a /. b :=
+theorem local_lym (n r : ℕ) (𝒜 : finset (rset r (fin n))) {hr1 : 1 ≤ r} {hr2 : r ≤ n} : 
+  (finset.card 𝒜 : ℚ) / (nat.choose n r) ≤ (finset.card (shadow 𝒜)) / (nat.choose n (r-1)) := 
+begin
+  have: r - 1 ≤ n := le_trans (nat.pred_le r) ‹r ≤ n›,
+  have: 0 < nat.choose n (r-1) := nat.choose_pos ‹r - 1 ≤ n›,
+  have: 0 < nat.choose n r := nat.choose_pos ‹r ≤ n›,
+  rw [div_le_iff', mul_comm, div_mul_eq_mul_div, le_div_iff]; norm_cast, rotate, 
+    assumption, assumption,
+
+  suffices: finset.card 𝒜 * r ≤ finset.card (shadow 𝒜) * (n - r + 1),
+    apply le_of_mul_le_mul_right _,
+    swap, exact (nat.fact r * nat.fact (n - r + 1)),
+    apply mul_pos, apply nat.fact_pos, apply nat.fact_pos,
+    have helper : nat.fact (r-1) * r = nat.fact r, by calc nat.fact (r-1) * r = nat.fact (r-1) * nat.succ (r-1) : sorry
+                                                                          ... = nat.fact r : sorry,
+    have q : finset.card 𝒜 * nat.choose n (r - 1) * (nat.fact r * nat.fact (n - r + 1)) 
+          = finset.card 𝒜 * nat.choose n (r - 1) * nat.fact (r - 1) * nat.fact (n - (r - 1)) * r,
+    exact (
+      calc finset.card 𝒜 * nat.choose n (r - 1) * (nat.fact r * nat.fact (n - r + 1)) 
+               = finset.card 𝒜 * nat.choose n (r - 1) * nat.fact r * nat.fact (n - r + 1) : by rw ← mul_assoc
+           ... = finset.card 𝒜 * nat.choose n (r - 1) * (nat.fact (r - 1) * r) * nat.fact (n - (r - 1)) : by rw [helper, sub_sub_assoc ‹_› ‹_›]
+           ... = finset.card 𝒜 * nat.choose n (r - 1) * nat.fact (r - 1) * nat.fact (n - (r - 1)) * r : sorry
+    ),
   sorry
+  -- finset.card 𝒜 * nat.choose n (r - 1) * (nat.fact r * nat.fact (n - r + 1)) ≤
+  -- finset.card (shadow 𝒜) * nat.choose n r * (nat.fact r * nat.fact (n - r + 1))
+
+  -- have: r - 1 ≤ n, rw nat.sub_le_right_iff_le_add, apply nat.le_succ_of_le ‹r ≤ n›,
+  -- suffices k : rat.mk ↑(finset.card 𝒜)          ↑(nat.choose n r)        / (↑(nat.fact (r-1) * nat.fact (n-r) * r * (n-r+1))) ≤ 
+  --              rat.mk ↑(finset.card (shadow 𝒜)) ↑(nat.choose n (r - 1))  / (↑(nat.fact (r-1) * nat.fact (n-r) * r * (n-r+1))),
+  --   apply le_of_mul_le_mul_right k _, 
+  --   rw inv_eq_one_div,
+  --   apply one_div_pos_of_pos,
+  --   rw ← rat.num_pos_iff_pos,
+  --   rw rat.coe_nat_num, 
+  --   rw int.coe_nat_pos,
+  --   apply mul_pos,
+  --   apply mul_pos,
+  --   apply mul_pos,
+  --   apply nat.fact_pos,
+  --   apply nat.fact_pos,
+  --   exact hr1,
+  --   exact (calc n - r + 1 ≥ r - r + 1 : by simp
+  --               ...       = 1         : by simp
+  --               ...       > 0         : by simp),
+  
+  -- rw [rat.div_num_denom, rat.coe_nat_denom, rat.coe_nat_num], 
+
+
+  -- rw [rat.mul_def],
+  -- rw [rat.mul_def, int.coe_nat_mul.reversed, int.coe_nat_mul.reversed], 
+
+  -- rw rat.le_def _ _, 
+  --   swap, rw int.coe_nat_pos, apply nat.choose_pos ‹r ≤ n›, 
+  --   swap, rw int.coe_nat_pos, apply nat.choose_pos, exact ‹r - 1 ≤ n›,
+  -- rw [← int.coe_nat_mul, ← int.coe_nat_mul, int.coe_nat_le], 
+  -- rw [nat.choose_eq_fact_div_fact ‹r - 1 ≤ n›, nat.choose_eq_fact_div_fact ‹r ≤ n›],
 end
