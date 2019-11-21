@@ -3,6 +3,8 @@ import data.fin
 import data.rat
 import data.nat.basic
 import data.fintype
+import algebra.big_operators
+import algebra.group_power
 import tactic.omega
 import tactic.linarith
 
@@ -14,15 +16,16 @@ variables {r : ℕ}
 
 @[reducible] def rset (r : ℕ) (X) [fintype X] := {x : finset X // x ∈ finset.powerset_len r (elems X)}
 
-def card_of_rset (x : rset r X) : finset.card x.val = r := (finset.mem_powerset_len.1 x.2).2
+def card_of_rset {x : rset r X} : finset.card x.val = r := (finset.mem_powerset_len.1 x.2).2
 
 instance rset_fintype (r : ℕ) : fintype (rset r X) := finset.subtype.fintype _
 
+@[reducible]
 def rset_mk (A : finset X) (H : finset.card A = r) : rset r X := 
 begin
   refine ⟨A, _⟩,
   rw finset.mem_powerset_len,
-  refine ⟨λ x _, complete x, H⟩,
+  exact ⟨finset.subset_univ _, H⟩,
 end
 
 @[reducible] instance : has_mem X (rset r X) := ⟨λ i A, i ∈ A.1⟩
@@ -54,14 +57,7 @@ def example2 : finset (rset 3 (fin 5)) :=
 #eval elems (rset 3 (fin 5))
 
 def stretch (A : rset r X) (s : X) (h : s ∉ A) : rset (r+1) X := 
-begin
-  use (insert s (A.1)),
-  rw finset.mem_powerset_len,
-  split,
-    apply finset.subset_univ,
-  rw finset.card_insert_of_not_mem h,
-  rw card_of_rset A
-end
+rset_mk (insert s (A.1)) $ by rw [finset.card_insert_of_not_mem h, card_of_rset]
 
 lemma mem_stretch (A : rset r X) (s : X) {h : s ∉ A} (i : X) : i ∈ stretch A s h ↔ i ∈ A ∨ i = s := 
 by rw [stretch, finset.mem_insert]; tauto
@@ -72,24 +68,19 @@ finset.subset_insert _ _
 lemma mem_stretch_self {A : rset r X} {s : X} (h : s ∉ A) : s ∈ stretch A s h := 
 finset.mem_insert_self _ _
 
-lemma mem_stretch_of_mem (A : rset r X) (s t : X) (p : s ∉ A) : t ∈ A → t ∈ stretch A s p := 
+lemma mem_stretch_of_mem {A : rset r X} {s t : X} {p : s ∉ A} : t ∈ A → t ∈ stretch A s p := 
 finset.mem_insert_of_mem
 
-def erase (A : rset r X) (s : X) (h : s ∈ A) : rset (r-1) X :=
-⟨finset.erase (A.1) s, finset.mem_powerset_len.2 ⟨finset.subset_univ _, 
-  begin
-    rw finset.card_erase_of_mem h,
-    rw card_of_rset A,
-    trivial
-  end⟩⟩
+def erase (A : rset (r+1) X) (s : X) (h : s ∈ A) : rset r X :=
+rset_mk (finset.erase (A.1) s) $ by rw [finset.card_erase_of_mem h, card_of_rset]; trivial
 
-lemma mem_erase (A : rset r X) (s : X) (h : s ∈ A) (i : X) : i ∈ erase A s h ↔ i ∈ A ∧ i ≠ s :=
+lemma mem_erase (A : rset (r+1) X) (s : X) (h : s ∈ A) (i : X) : i ∈ erase A s h ↔ i ∈ A ∧ i ≠ s :=
 by rw [erase, finset.mem_erase]; tauto
 
-lemma subset_erase {A : rset r X} {s : X} (h : s ∈ A) : (erase A s h).1 ⊆ A.1 :=
+lemma subset_erase {A : rset (r+1) X} {s : X} (h : s ∈ A) : (erase A s h).1 ⊆ A.1 :=
 finset.erase_subset _ _
 
-theorem not_mem_erase_self {A : rset r X} {s : X} (h : s ∈ A) : s ∉ erase A s h := 
+theorem not_mem_erase_self {A : rset (r+1) X} {s : X} (h : s ∈ A) : s ∉ erase A s h := 
 finset.not_mem_erase _ _
 
 lemma erase_iff_stretch {A : rset r X} {B : rset (r+1) X} {s : X} {H1 : s ∉ A} {H2 : s ∈ B} : stretch A s H1 = B ↔ erase B s H2 = A:=
@@ -137,14 +128,11 @@ begin
   apply finset.card_powerset_len
 end
 
-def shadow {r : ℕ} (𝒜 : finset (rset r X)) : finset (rset (r-1) X) := 
+def all_removals {r : ℕ} (A : rset (r+1) X) : finset (rset r X) :=
 begin
-  refine 𝒜.bind (λ A, _),
-  refine A.1.attach.map ⟨_, _⟩, 
-    intro i,
-    apply erase ⟨A.1, A.2⟩ i.1,
-    exact i.2,
+  refine A.1.attach.map ⟨λ i, erase A i.1 i.2, _⟩,
   rintros ⟨x1, x1p⟩ ⟨_, _⟩ q,
+  dsimp at q,
   rw [erase, erase] at q,
   simp at q,
   congr,
@@ -154,13 +142,32 @@ begin
   apply finset.mem_erase_of_ne_of_mem a x1p,
 end
 
-#eval shadow example2 -- should be {{0,1}, {0,2}, {0,3}, {0,4}, {1,2}, {1,3}, {2,3}, {2,4}}
+def mem_all_removals {r : ℕ} {A : rset (r+1) X} {B : rset r X} : B ∈ all_removals A ↔ ∃ i ∈ A, erase A i H = B :=
+by simp [all_removals]
 
-def mem_shadow {r : ℕ} {𝒜 : finset (rset r X)} (B : rset (r-1) X) : B ∈ shadow 𝒜 ↔ ∃ A ∈ 𝒜, ∃ i ∈ A, erase A i H = B := 
-by simp [shadow]
+lemma card_map {α β} [decidable_eq β] {f : α ↪ β} {s : finset α} : (s.map f).card = s.card := 
+begin
+  rw finset.map_eq_image,
+  rw finset.card_image_of_injective,
+  exact f.2
+end
+
+lemma card_all_removals {r : ℕ} {A : rset (r+1) X} : (all_removals A).card = r + 1 :=
+by rw [all_removals, card_map, finset.card_attach]; exact card_of_rset
+
+def shadow {r : ℕ} (𝒜 : finset (rset (r+1) X)) : finset (rset r X) := 
+𝒜.bind all_removals
+
+reserve prefix `∂`:30
+notation ∂𝒜 := shadow 𝒜
+
+#eval ∂example2 -- should be {{0,1}, {0,2}, {0,3}, {0,4}, {1,2}, {1,3}, {2,3}, {2,4}}
+
+def mem_shadow {r : ℕ} {𝒜 : finset (rset (r+1) X)} (B : rset r X) : B ∈ ∂𝒜 ↔ ∃ A ∈ 𝒜, ∃ i ∈ A, erase A i H = B := 
+by simp [shadow, all_removals]
 
 #eval rat.mk (finset.card example2) (nat.choose 5 3)
-#eval rat.mk (finset.card (shadow example2)) (nat.choose 5 2)
+#eval rat.mk (finset.card (∂example2)) (nat.choose 5 2)
 
 #check rat.mk (finset.card (elems (fin 3))) 3
 #eval rat.mk (finset.card (elems (fin 3))) 4
@@ -177,48 +184,23 @@ begin
   apply finset.mem_singleton_self
 end
 
-lemma thingy (A : finset X) (B : finset X) : A ∪ (B \ A) = A ∪ B :=
-by ext; simp [finset.mem_union, finset.mem_sdiff]; tauto
-
-#print thingy
-
-lemma thingy2 (A : finset X) (B : finset X) : A ∪ (B \ A) = B ∪ (A \ B) :=
-by rw [thingy, thingy, finset.union_comm]
-
-lemma thingy3 (A : finset X) (B : finset X) : A \ B = ∅ ↔ A ⊆ B :=
-by simp [finset.ext, finset.subset_iff]
-
-lemma thingy5 (A : finset X) : (∃ x, A = finset.singleton x) ↔ ∃! x, x ∈ A := 
-begin
-  split; rintro ⟨x, t⟩; use x,
-    rw t, 
-    exact ⟨finset.mem_singleton_self _, λ i, finset.mem_singleton.1⟩, 
-  ext, rw finset.mem_singleton, 
-  exact ⟨λ r, t.right _ r, λ r, r.symm ▸ t.left⟩
-end
-
-lemma thingy4 (A : finset X) : finset.card A = 1 ↔ ∃! x, x ∈ A :=
-by rw [← thingy5, finset.card_eq_one]
-
 lemma test {A : rset r X} {B : rset (r+1) X} : finset.card (B.1 \ A.1) = 1 ↔ cube_graph A B := 
 begin
-  rw cube_graph,
-  have : finset.card A.1 + finset.card (B.1 \ A.1) = finset.card B.1 + finset.card (A.1 \ B.1),
-    rw [← finset.card_disjoint_union (finset.disjoint_sdiff), ← finset.card_disjoint_union (finset.disjoint_sdiff), thingy2], 
-  rw [card_of_rset, card_of_rset] at this,
-  simp at this,
-  rw this,
-  transitivity (finset.card (A.1 \ B.1) = 0),
-    split; intro p,
-      apply add_left_cancel, assumption,
-    rw p,
-  simp [thingy3]
+  rw cube_graph, unfold,
+  rw [← finset.sdiff_eq_empty_iff_subset, ← finset.card_eq_zero],
+  have q: finset.card A.1 + finset.card (B.1 \ A.1) = finset.card B.1 + finset.card (A.1 \ B.1),
+    rw [← finset.card_disjoint_union (finset.disjoint_sdiff), 
+        ← finset.card_disjoint_union (finset.disjoint_sdiff), 
+        finset.union_sdiff_symm], 
+  simp [card_of_rset] at q,
+  rw [q, nat.one_add, nat.succ_inj']
 end
 
 lemma stretch_iff_related {A : rset r X} {B : rset (r+1) X} : cube_graph A B ↔ ∃ (i ∉ A), stretch A i H = B := 
 begin
   split, intro p,
-    cases finset.card_eq_one.1 (test.2 p) with i _, use i,
+    cases finset.card_eq_one.1 (test.2 p) with i _, 
+    use i,
     have k : i ∈ B.1 ∧ i ∉ A.1 := finset.mem_sdiff.1 (‹B.1 \ A.1 = {i}›.symm ▸ finset.mem_singleton_self i),
     use k.2, ext, rw mem_stretch,
     refine ⟨λ s, s.elim _ (λ v, v.symm ▸ k.1), λ s, _⟩,
@@ -236,12 +218,16 @@ end
 lemma erase_iff_related (A : rset r X) (B : rset (r+1) X) : cube_graph A B ↔ ∃ (i ∈ B), erase B i H = A := 
 iff.trans stretch_iff_related erase_iff_stretch'
 
-lemma sub_sub_assoc {r k n : ℕ} (h1 : k ≤ r) (h2 : r ≤ n) : n - r + k = n - (r - k) := 
-by omega
+def all_removals_iff_related {r : ℕ} {A : rset r X} {B : rset (r+1) X} : A ∈ all_removals B ↔ cube_graph A B :=
+begin
+  rw erase_iff_related,
+  rw mem_all_removals,
+end
+-- by rw [erase_iff_related, mem_all_removals]
 
 lemma choose_symm {n k : ℕ} (hk : k ≤ n) : nat.choose n k = nat.choose n (n-k) :=
 calc nat.choose n k = nat.fact n / (nat.fact k * nat.fact (n - k)) : nat.choose_eq_fact_div_fact hk
-     ...            = nat.fact n / (nat.fact (n - k) * nat.fact k) : by rw mul_comm
+     ...            = nat.fact n / (nat.fact (n - k) * nat.fact k) : by ac_refl
      ...            = nat.choose n (n-k) : by rw [nat.choose_eq_fact_div_fact (nat.sub_le _ _), nat.sub_sub_self hk]
 
 lemma nat.choose_succ_right_eq {n k : ℕ} : nat.choose n (k + 1) * (k + 1) = nat.choose n k * (n - k) :=
@@ -273,96 +259,187 @@ begin
   apply nat.choose_pos (le_trans (nat.pred_le _) hr2)
 end
 
-lemma fact_pred {r : ℕ} (h : r > 0) : nat.fact r = r * nat.fact (r-1) := 
-calc nat.fact r = nat.fact (nat.succ (r-1))       : by rw [← nat.pred_eq_sub_one, nat.succ_pred_eq_of_pos h]
-        ...     = nat.succ (r-1) * nat.fact (r-1) : nat.fact_succ _
-        ...     = r * nat.fact (r-1)              : by rw [← nat.pred_eq_sub_one, nat.succ_pred_eq_of_pos h]
-
-lemma choose_lemma {n r : ℕ} (hr1 : 1 ≤ r) (hr2 : r ≤ n) : (n - r + 1) * nat.choose n (r-1) = nat.choose n r * r :=
+lemma union_bound {A : finset (finset X)} : finset.card (A.fold (∪) ∅ id) ≤ A.fold (+) (0 : ℕ) finset.card := 
 begin
-  have: r - 1 ≤ n := le_trans (nat.pred_le r) ‹r ≤ n›,
-  apply nat.eq_of_mul_eq_mul_right (mul_pos (nat.fact_pos (r-1)) (nat.fact_pos (n-r))),
-  by calc (n - r + 1) * nat.choose n (r - 1) * (nat.fact (r - 1) * nat.fact (n - r))
-        = nat.choose n (r-1) * nat.fact (r-1) * ((n - r + 1) * nat.fact (n - r)) : by ac_refl
-    ... = nat.choose n (r-1) * nat.fact (r-1) * nat.fact (n - r + 1)             : by rw ← nat.fact_succ
-    ... = nat.choose n (r-1) * nat.fact (r-1) * nat.fact (n - (r - 1))           : by rw sub_sub_assoc hr1 hr2
-    ... = nat.fact n                                                             : by rw nat.choose_mul_fact_mul_fact ‹r - 1 ≤ n›
-    ... = nat.choose n r * nat.fact r * nat.fact (n - r)                         : by rw ← nat.choose_mul_fact_mul_fact ‹r ≤ n›
-    ... = nat.choose n r * (r * nat.fact (r - 1)) * nat.fact (n - r)             : by rw fact_pred ‹r ≥ 1›
-    ... = nat.choose n r * r * (nat.fact (r - 1) * nat.fact (n - r))             : by ac_refl,
+  apply finset.induction_on A,
+    rw [finset.fold_empty, finset.fold_empty, finset.card_empty],
+  intros a s h k,
+    rw [finset.fold_insert h, finset.fold_insert h], 
+    transitivity,
+      apply finset.card_union_le,
+    apply add_le_add_left', exact k
 end
 
-lemma main_lemma {A B n r : ℕ} (hr1 : 1 ≤ r) (hr2 : r ≤ n) : A * r ≤ B * (n - r + 1) → (A : ℚ) / (nat.choose n r) ≤ B / nat.choose n (r-1) := 
+lemma disjoint_all {α} [decidable_eq α] {A : finset (finset α)} {z : finset α} (h : ∀ x ∈ A, disjoint z x) : disjoint z (A.fold (∪) ∅ id) := 
 begin
-  intro k,
-  have: r - 1 ≤ n := le_trans (nat.pred_le r) ‹r ≤ n›,
-  have: 0 < nat.choose n (r-1) := nat.choose_pos ‹r - 1 ≤ n›,
-  have: 0 < nat.choose n r := nat.choose_pos ‹r ≤ n›,
-  rw [div_le_iff', mul_comm, div_mul_eq_mul_div, le_div_iff]; norm_cast, rotate, 
-    assumption, assumption,
-  apply le_of_mul_le_mul_right _,
-  exact hr1,
-  by calc A * nat.choose n (r - 1) * r = A * r * nat.choose n (r-1) : by ac_refl
-          ... ≤ B * (n - r + 1) * nat.choose n (r-1)                : by apply nat.mul_le_mul_right _ k
-          ... = B * nat.choose n r * r                              : by rw [mul_assoc, mul_assoc, choose_lemma hr1 hr2]
+  revert h,
+  apply finset.induction_on A,
+  { rw finset.fold_empty,
+    intro,
+    apply finset.disjoint_empty_right },
+  { intros a s h₂ ih h,
+    rw finset.fold_insert h₂,
+    rw finset.disjoint_union_right,
+    split,
+      exact h _ (finset.mem_insert_self _ _),
+    exact ih (λ x hx, h _ (finset.mem_insert_of_mem hx)) }
 end
 
--- @[simp] theorem div_mk_div_cancel_left {a b c : ℤ} (c0 : c ≠ 0) : (a * c) /. (b * c) = a /. b :=
-theorem local_lym (n r : ℕ) (𝒜 : finset (rset r (fin n))) {hr1 : 1 ≤ r} {hr2 : r ≤ n} : 
-  (finset.card 𝒜 : ℚ) / (nat.choose n r) ≤ (finset.card (shadow 𝒜)) / (nat.choose n (r-1)) := 
+lemma disjoint_union_cards {A : finset (finset X)} : (∀ x ∈ A, ∀ y ∈ A, x ≠ y → disjoint x y) → finset.card (A.fold (∪) ∅ id) = A.fold (+) (0 : ℕ) finset.card :=
 begin
-  have: r - 1 ≤ n := le_trans (nat.pred_le r) ‹r ≤ n›,
-  have: 0 < nat.choose n (r-1) := nat.choose_pos ‹r - 1 ≤ n›,
-  have: 0 < nat.choose n r := nat.choose_pos ‹r ≤ n›,
-  rw [div_le_iff', mul_comm, div_mul_eq_mul_div, le_div_iff]; norm_cast, rotate, 
-    assumption, assumption,
+  apply finset.induction_on A,
+    intro,
+    rw [finset.fold_empty, finset.fold_empty, finset.card_empty],
+  intros a s h₂ ih h,
+    rw [finset.fold_insert h₂, finset.fold_insert h₂],
+    rw finset.card_disjoint_union,
+      congr,
+      apply ih,
+      intros x hx y hy t, 
+      refine (h _ (finset.mem_insert_of_mem hx) _ (finset.mem_insert_of_mem hy) t),
+  apply disjoint_all,
+  intros x hx,
+  apply h,
+      exact finset.mem_insert_self _ _,
+    exact finset.mem_insert_of_mem hx,
+  dsimp, 
+  intro,
+  rw a_1 at h₂,
+  exact h₂ hx
+end
 
-  suffices: finset.card 𝒜 * r ≤ finset.card (shadow 𝒜) * (n - r + 1),
-    apply le_of_mul_le_mul_right _,
-    swap, exact (nat.fact r * nat.fact (n - r + 1)),
-    apply mul_pos, apply nat.fact_pos, apply nat.fact_pos,
-    have helper : nat.fact (r-1) * r = nat.fact r, by calc nat.fact (r-1) * r = nat.fact (r-1) * nat.succ (r-1) : sorry
-                                                                          ... = nat.fact r : sorry,
-    have q : finset.card 𝒜 * nat.choose n (r - 1) * (nat.fact r * nat.fact (n - r + 1)) 
-          = finset.card 𝒜 * nat.choose n (r - 1) * nat.fact (r - 1) * nat.fact (n - (r - 1)) * r,
-    exact (
-      calc finset.card 𝒜 * nat.choose n (r - 1) * (nat.fact r * nat.fact (n - r + 1)) 
-               = finset.card 𝒜 * nat.choose n (r - 1) * nat.fact r * nat.fact (n - r + 1) : by rw ← mul_assoc
-           ... = finset.card 𝒜 * nat.choose n (r - 1) * (nat.fact (r - 1) * r) * nat.fact (n - (r - 1)) : by rw [helper, sub_sub_assoc ‹_› ‹_›]
-           ... = finset.card 𝒜 * nat.choose n (r - 1) * nat.fact (r - 1) * nat.fact (n - (r - 1)) * r : sorry
-    ),
-  sorry
-  -- finset.card 𝒜 * nat.choose n (r - 1) * (nat.fact r * nat.fact (n - r + 1)) ≤
-  -- finset.card (shadow 𝒜) * nat.choose n r * (nat.fact r * nat.fact (n - r + 1))
+def from_above {n : ℕ} (𝒜 : finset (rset (r+1) (fin n))) : finset (rset (r+1) (fin n) × rset r (fin n)) :=
+𝒜.bind $ λ A, (all_removals A).map ⟨λ x, (A, x), λ _ _, by simp⟩
 
-  -- have: r - 1 ≤ n, rw nat.sub_le_right_iff_le_add, apply nat.le_succ_of_le ‹r ≤ n›,
-  -- suffices k : rat.mk ↑(finset.card 𝒜)          ↑(nat.choose n r)        / (↑(nat.fact (r-1) * nat.fact (n-r) * r * (n-r+1))) ≤ 
-  --              rat.mk ↑(finset.card (shadow 𝒜)) ↑(nat.choose n (r - 1))  / (↑(nat.fact (r-1) * nat.fact (n-r) * r * (n-r+1))),
-  --   apply le_of_mul_le_mul_right k _, 
-  --   rw inv_eq_one_div,
-  --   apply one_div_pos_of_pos,
-  --   rw ← rat.num_pos_iff_pos,
-  --   rw rat.coe_nat_num, 
-  --   rw int.coe_nat_pos,
-  --   apply mul_pos,
-  --   apply mul_pos,
-  --   apply mul_pos,
-  --   apply nat.fact_pos,
-  --   apply nat.fact_pos,
-  --   exact hr1,
-  --   exact (calc n - r + 1 ≥ r - r + 1 : by simp
-  --               ...       = 1         : by simp
-  --               ...       > 0         : by simp),
-  
-  -- rw [rat.div_num_denom, rat.coe_nat_denom, rat.coe_nat_num], 
+lemma mem_from_above {n : ℕ} {𝒜 : finset (rset (r+1) (fin n))} {A : rset (r+1) (fin n)} {B : rset r (fin n)} : 
+  (A,B) ∈ from_above 𝒜 ↔ A ∈ 𝒜 ∧ B ∈ all_removals A :=
+begin
+  rw [from_above, finset.mem_bind], 
+  split; intro h,
+    rcases h with ⟨a, Ha, h⟩,
+    rw finset.mem_map at h,
+    rcases h with ⟨b, Hb, h⟩,
+    injection h with Ah Bh,
+    rw [Ah, Bh] at *,
+    exact ⟨Ha, Hb⟩,
+  use A,
+  use h.1,
+  rw finset.mem_map,
+  use B,
+  use h.2,
+  refl
+end
 
+lemma card_from_above {n : ℕ} (𝒜 : finset (rset (r+1) (fin n))) : (from_above 𝒜).card = 𝒜.card * (r+1) :=
+begin
+  rw [from_above, finset.card_bind],
+    rw [← nat.smul_eq_mul, ← finset.sum_const],
+    congr, ext,
+    rw card_map,
+    exact card_all_removals,
+  intros,
+  rw finset.disjoint_iff_ne,
+  intros,
+  rw finset.mem_map at *,
+  rcases H_2 with ⟨_, _, At⟩,
+  rcases H_3 with ⟨_, _, Bt⟩,
+  intro,
+  have q: a_1.1 = b.1, rw a_2,
+  rw [←At, ←Bt] at q,
+  exact a q
+end
 
-  -- rw [rat.mul_def],
-  -- rw [rat.mul_def, int.coe_nat_mul.reversed, int.coe_nat_mul.reversed], 
+def complement {n : ℕ} (A : rset r (fin n)) : rset (n-r) (fin n) :=
+begin
+  refine rset_mk (finset.univ \ A.1) _,
+  rw [finset.card_sdiff, card_of_rset, finset.card_univ, fintype.card_fin],
+  apply finset.subset_univ
+end
 
-  -- rw rat.le_def _ _, 
-  --   swap, rw int.coe_nat_pos, apply nat.choose_pos ‹r ≤ n›, 
-  --   swap, rw int.coe_nat_pos, apply nat.choose_pos, exact ‹r - 1 ≤ n›,
-  -- rw [← int.coe_nat_mul, ← int.coe_nat_mul, int.coe_nat_le], 
-  -- rw [nat.choose_eq_fact_div_fact ‹r - 1 ≤ n›, nat.choose_eq_fact_div_fact ‹r ≤ n›],
+lemma mem_complement {n : ℕ} {x : fin n} {A : rset r (fin n)} : (x ∉ A ↔ x ∈ complement A) :=
+begin
+  rw [complement, finset.mem_sdiff],
+  simp [complete]
+end
+
+def from_below {n : ℕ} (𝒜 : finset (rset (r+1) (fin n))) : finset (rset (r+1) (fin n) × rset r (fin n)) :=
+begin
+  refine (∂𝒜).bind (λ B, _),
+  refine (finset.univ \ B.1).attach.map ⟨λ x, (stretch B x.1 (finset.mem_sdiff.1 x.2).2, B), _⟩,
+  rintros ⟨x₁, x₁h⟩ ⟨x₂, x₂h⟩ h,
+  rw finset.mem_sdiff at x₂h,
+  injection h,
+  congr,
+  have q := mem_stretch_self x₂h.2,
+  rw [← h_1, mem_stretch] at q,
+  tauto
+end
+
+lemma mem_from_below {n : ℕ} {𝒜 : finset (rset (r+1) (fin n))} {A : rset (r+1) (fin n)} {B : rset r (fin n)} :
+  (A,B) ∈ from_above 𝒜 ↔ A ∈ 𝒜 ∧ ∃ (i ∉ B), stretch B i H = A :=
+begin
+  rw [mem_from_above, ← stretch_iff_related, all_removals_iff_related]
+end
+
+lemma mem_from_below' {n : ℕ} {𝒜 : finset (rset (r+1) (fin n))} {A : rset (r+1) (fin n)} {B : rset r (fin n)} :
+  A ∈ 𝒜 ∧ (∃ (i ∉ B), stretch B i H = A) → (A,B) ∈ from_below 𝒜 :=
+begin
+  intro h,
+  rw [from_below, finset.mem_bind],
+  use B,
+  split,
+    rw mem_shadow,
+    use A,
+    use h.1,
+    refine erase_iff_stretch'.1 h.2,
+  rw [finset.mem_map],
+  rcases h.2 with ⟨_, _, _⟩,
+  refine ⟨⟨w, finset.mem_sdiff.2 ⟨complete _, ‹_›⟩⟩, by simp, _⟩,
+  dsimp,
+  rw ‹stretch B w _ = A›
+end
+
+lemma above_sub_below {n : ℕ} {𝒜 : finset (rset (r+1) (fin n))} : from_above 𝒜 ⊆ from_below 𝒜 :=
+begin
+  intros x h,
+  have e: x = (x.1, x.2), simp,
+  rw e,
+  apply mem_from_below',
+  rw ← mem_from_below,
+  rwa ← e,
+end
+
+lemma card_from_below {n : ℕ} (𝒜 : finset (rset (r+1) (fin n))) : (from_below 𝒜).card ≤ (∂𝒜).card * (n-r) :=
+begin
+  rw [from_below],
+  transitivity,
+    apply finset.card_bind_le,
+  apply ge_of_eq,
+  rw [← nat.smul_eq_mul, ← finset.sum_const],
+  congr,
+  ext,
+  rw card_map,
+  rw finset.card_attach,
+  rw finset.card_sdiff,
+  rw card_of_rset,
+  rw [finset.card_univ, fintype.card_fin],
+  apply finset.subset_univ
+end
+
+lemma finally {n r : ℕ} (hr2 : r + 1 ≤ n) : n - (r + 1) + 1 = n - r := 
+begin
+  rw ← nat.sub_add_comm hr2,
+  exact nat.succ_sub_succ _ _
+end
+
+theorem localLYM {n r : ℕ} (𝒜 : finset (rset (r+1) (fin n))) {hr2 : r + 1 ≤ n} :
+  (𝒜.card : ℚ) / nat.choose n (r+1) ≤ (∂𝒜).card / nat.choose n r :=
+begin
+  apply main_lemma (by simp) hr2,
+  rw [finally hr2],
+  exact (
+    calc 𝒜.card * (r + 1) = (from_above 𝒜).card : (card_from_above 𝒜).symm
+         ... ≤ (from_below 𝒜).card : begin apply finset.card_le_of_subset _, apply above_sub_below end
+         ... ≤ finset.card (∂𝒜) * (n - r) : (card_from_below 𝒜)
+  )
 end
