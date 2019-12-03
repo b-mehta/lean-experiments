@@ -26,7 +26,7 @@ section rset
   begin
     refine ⟨A, _⟩,
     rw finset.mem_powerset_len,
-    exact ⟨finset.subset_univ _, H⟩,
+    exact ⟨finset.subset_univ _, H⟩
   end
 
   @[simp] lemma card_of_rset {x : rset r X} : finset.card x.val = r := (finset.mem_powerset_len.1 x.2).2
@@ -191,8 +191,8 @@ begin
     refine ⟨λ s, s.elim _ (λ v, v.symm ▸ k.1), λ s, _⟩,
       apply p, 
     safe,
-  rintros ⟨_, _, _⟩,
-  rw ← ‹stretch A _ _ = B›,
+  rintros ⟨_, _, k⟩,
+  rw ← k,
   apply stretch_subset
 end
 
@@ -296,7 +296,7 @@ end
 lemma above_sub_below {n : ℕ} {𝒜 : finset (rset (r+1) (fin n))} : from_above 𝒜 ⊆ from_below 𝒜 :=
 begin
   rintros ⟨x,y⟩ h,
-  apply mem_from_below',
+  apply mem_from_below,
   rwa [← stretch_iff_related, ← all_removals_iff_related, ← mem_from_above]
 end
 
