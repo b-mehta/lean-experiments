@@ -10,67 +10,14 @@ variables {X : Type*}
 variables [fintype X] [decidable_eq X]
 variables {r : ℕ}
 
-/- 
-Define a type for rsets, give an easy constructor of rsets and a lemma for their cardinality. 
-Also, we can use extensionality on them, and they're a finite type with cardinality a binomial.
--/
-section rset
-  @[reducible] def rset (r : ℕ) (X) [fintype X] := {x : finset X // x.card = r}
+lemma mem_powerset_len_iff_card : 
+  ∀ (x : finset X), x ∈ finset.powerset_len r (elems X) ↔ finset.card x = r :=
+begin
+  intro x, rw finset.mem_powerset_len, exact and_iff_right (finset.subset_univ _)
+end
 
-  @[simp] lemma card_of_rset {x : rset r X} : finset.card x.val = r := x.property
-
-  @[reducible] instance : has_mem X (rset r X) := ⟨λ i A, i ∈ A.val⟩
-
-  theorem eq_of_veq : ∀ {s t : rset r X}, s.val = t.val → s = t
-  | ⟨s, _⟩ ⟨t, _⟩ rfl := rfl
-
-  theorem val_inj {s t : rset r X} : s.1 = t.1 ↔ s = t :=
-  ⟨eq_of_veq, congr_arg _⟩
-
-  theorem ext {s₁ s₂ : rset r X} : s₁ = s₂ ↔ (∀ a, a ∈ s₁ ↔ a ∈ s₂) :=
-  val_inj.symm.trans finset.ext
-
-  @[ext]
-  theorem ext' {s₁ s₂ : rset r X} : (∀ a, a ∈ s₁ ↔ a ∈ s₂) → s₁ = s₂ :=
-  ext.2
-
-  lemma mem_powerset_len_iff_card : 
-    ∀ (x : finset X), x ∈ finset.powerset_len r (elems X) ↔ finset.card x = r :=
-  begin
-    intro x, rw finset.mem_powerset_len, exact and_iff_right (finset.subset_univ _)
-  end
-
-  instance rset_fintype (r : ℕ) : fintype (rset r X) := 
-    fintype.subtype _ mem_powerset_len_iff_card
-
-  theorem rset_card (r : ℕ) : card (rset r X) = nat.choose (card X) r := 
-  begin
-    rw card_of_subtype _ mem_powerset_len_iff_card,
-    apply finset.card_powerset_len,
-    assumption,
-  end
-
-  def rset.cast {r r' : ℕ} (h : r = r') (A : rset r X) : rset r' X :=
-  ⟨A.val, h ▸ A.property⟩
-end rset
-
--- An example of an rset, and a set system.
-#eval elems (rset 3 (fin 5))
-
-def example1 : rset 4 (fin 9) := ⟨{0,1,4,5}, by trivial⟩
--- def example2 : finset (rset 3 (fin 5)) := 
--- { ⟨{0,1,2}, by trivial⟩,
---   ⟨{0,1,3}, by trivial⟩,
---   ⟨{0,2,3}, by trivial⟩,
---   ⟨{0,2,4}, by trivial⟩
---   }
-
-#eval example1
--- #eval example2
-
-def example2 : finset (finset (fin 5)) :=
+def example1 : finset (finset (fin 5)) :=
 { {0,1,2}, {0,1,3}, {0,2,3}, {0,2,4} } 
-
 
 def is_layer (𝒜 : finset (finset X)) (r : ℕ) : Prop := ∀ A ∈ 𝒜, finset.card A = r
 
@@ -91,8 +38,8 @@ lemma powerset_len_iff_is_layer (𝒜 : finset (finset X)) (r : ℕ) : is_layer 
 begin
   split; intros p A h,
     rw mem_powerset_len_iff_card,
-    refine (p _ h),
-  refine (mem_powerset_len_iff_card _).1 (p h)
+    exact (p _ h),
+  exact (mem_powerset_len_iff_card _).1 (p h)
 end
 
 lemma size_in_layer (𝒜 : finset (finset X)) (r : ℕ) (h : is_layer 𝒜 r) : finset.card 𝒜 ≤ nat.choose (card X) r :=
@@ -112,15 +59,14 @@ begin
 end
 ⟩
 
-lemma all_removals_size (A : rset r X) : is_layer (all_removals A.1) (r-1) := 
+lemma all_removals_size (A : finset X) (h : A.card = r) : is_layer (all_removals A) (r-1) := 
 begin
   intros _ _,
   rw [all_removals, finset.mem_map] at H,
-  rcases H with ⟨_, _, _⟩,
-  dsimp at H_h_h,
-  rw [← H_h_h, finset.card_erase_of_mem, A.2],
-  refl,
-  exact H_w.2,
+  rcases H with ⟨⟨_, p⟩, _, k⟩,
+  dsimp at k,
+  rw [← k, finset.card_erase_of_mem p, h],
+  refl
 end
 
 def mem_all_removals {A : finset X} {B : finset X} : B ∈ all_removals A ↔ ∃ i ∈ A, finset.erase A i = B :=
@@ -143,7 +89,7 @@ begin
   intros a _ H,
   simp [shadow] at H,
   rcases H with ⟨A, ⟨_, _⟩⟩,
-  apply all_removals_size ⟨A, a _ ‹_›⟩,
+  apply all_removals_size A (a _ ‹_›),
   tauto
 end
 
@@ -328,8 +274,7 @@ begin
   rcases sub_of_shadow B' hB' with ⟨B, hB, _⟩;
   have k : A ⊆ B := trans ‹A ⊆ B'› ‹B' ⊆ B›;
   clear h_1_h hB' m B',
-    rw [mem_ar] at hA,
-    rw [mem_ar] at hB,
+    rw [mem_ar] at *,
     apply H _ hA.1 _ hB.1 _ k,
     intro,
     rw [a, hB.2] at hA,
@@ -338,8 +283,7 @@ begin
     omega,
   rw finset.mem_union at hB,
   cases hB,
-    rw [mem_ar] at hA,
-    rw [mem_ar] at hB,
+    rw [mem_ar] at *,
     apply H _ hA.1 _ hB.1 _ k,
     intro,
     rw [a, hB.2] at hA,
@@ -423,12 +367,22 @@ begin
   apply nat.choose_pos (zero_le n)
 end
 
-lemma dominate_choose_lt {r n : ℕ} (h : 2*r < n) : nat.choose n r ≤ nat.choose n (r+1) :=
+lemma dominate_choose_lt {r n : ℕ} (h : r < n/2) : nat.choose n r ≤ nat.choose n (r+1) :=
 begin
-  apply le_of_mul_le_mul_right,
+  have q : n - r > 0,
+    rw gt_iff_lt,
+    rw nat.lt_sub_left_iff_add_lt,
+    rw add_zero,
+    apply lt_of_lt_of_le h,
+    exact nat.div_le_self n 2,
+  apply le_of_mul_le_mul_right _ q,
   rw ← nat.choose_succ_right_eq,
   apply nat.mul_le_mul_left,
-  repeat {omega}
+  rw ← nat.lt_iff_add_one_le,
+  apply nat.lt_sub_left_of_add_lt,
+  by calc r + r < n/2 + n/2 : add_lt_add h h
+            ... = n/2 * 2   : (mul_two _).symm
+            ... ≤ n         : nat.div_mul_le_self n 2
 end
 
 lemma dominate_choose_lt' {n r : ℕ} (hr : r ≤ n/2) : nat.choose n r ≤ nat.choose n (n/2) :=
@@ -438,9 +392,7 @@ begin
   cases lt_or_eq_of_le a,
     transitivity,
       apply dominate_choose_lt,
-      apply lt_of_lt_of_le (nat.mul_lt_mul_of_pos_left h zero_lt_two),
-      rw mul_comm,
-      exact (nat.div_mul_le_self n 2),
+      exact h,
     exact k h,
   rw h,
 end 
@@ -478,7 +430,6 @@ begin
   have q1 := lubell_yamamoto_meshalkin n 𝒜 H,
   set f := (λ (r : ℕ), ((𝒜#r).card : ℚ) / nat.choose n r),
   set g := (λ (r : ℕ), ((𝒜#r).card : ℚ) / nat.choose n (n/2)),
-  -- have := g ≤ f,
   have q2 : finset.sum (finset.range (n + 1)) g ≤ finset.sum (finset.range (n + 1)) f,
     apply finset.sum_le_sum,
     intros r hr,
@@ -493,14 +444,9 @@ begin
   have q: g = h,
     ext r,
     apply test.symm,
-  rw q at this,
-  rw ← finset.sum_mul at this,
-  rw one_div_eq_inv at this,
-  rw ← div_eq_mul_inv at this,
-  rw div_le_iff at this,
+  rw [q, ← finset.sum_mul, one_div_eq_inv, ← div_eq_mul_inv, div_le_iff] at this,
     swap, norm_cast, apply nat.choose_pos, apply nat.div_le_self',
-  rw one_mul at this,
-  rw ← finset.sum_nat_cast at this,
+  rw [one_mul, ← finset.sum_nat_cast] at this,
   norm_cast at this,
   rw ← finset.card_bind at this,
     suffices m: finset.bind (finset.range (n + 1)) (λ (u : ℕ), 𝒜#u) = 𝒜,
