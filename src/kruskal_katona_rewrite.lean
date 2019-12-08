@@ -9,9 +9,9 @@ open finset
 
 variables {X : Type*}
 variables [fintype X] [decidable_eq X]
-variables {r : ℕ}
+variables {n : ℕ}
 
-lemma mem_powerset_len_iff_card : ∀ (x : finset X), x ∈ powerset_len r (elems X) ↔ card x = r :=
+lemma mem_powerset_len_iff_card {r : ℕ} : ∀ (x : finset X), x ∈ powerset_len r (elems X) ↔ card x = r :=
 by intro x; rw mem_powerset_len; exact and_iff_right (subset_univ _)
 
 def example1 : finset (finset (fin 5)) :=
@@ -60,7 +60,7 @@ begin
 end
 ⟩
 
-lemma all_removals_size {A : finset X} (h : A.card = r) : is_layer (all_removals A) (r-1) := 
+lemma all_removals_size {A : finset X} {r : ℕ} (h : A.card = r) : is_layer (all_removals A) (r-1) := 
 begin
   intros _ H,
   rw [all_removals, mem_map] at H,
@@ -73,7 +73,7 @@ end
 def mem_all_removals {A : finset X} {B : finset X} : B ∈ all_removals A ↔ ∃ i ∈ A, erase A i = B :=
 by simp [all_removals]
 
-lemma card_all_removals {A : finset X} {H : card A = r} : (all_removals A).card = r :=
+lemma card_all_removals {A : finset X} {r : ℕ} {H : card A = r} : (all_removals A).card = r :=
 by rw [all_removals, card_map, card_attach, H]
 
 def shadow (𝒜 : finset (finset X)) : finset (finset X) := 
@@ -98,7 +98,7 @@ begin
     rw erase_insert Hi
 end
 
-lemma shadow_layer (𝒜 : finset (finset X)) : is_layer 𝒜 r → is_layer (∂𝒜) (r-1) :=
+lemma shadow_layer {r : ℕ} {𝒜 : finset (finset X)} : is_layer 𝒜 r → is_layer (∂𝒜) (r-1) :=
 begin
   intros a A H,
   rw [shadow, mem_bind] at H,
@@ -117,8 +117,7 @@ begin
 end
 
 lemma multiply_out {A B n r : ℕ} (hr1 : 1 ≤ r) (hr2 : r ≤ n)
-  (h : A * r ≤ B * (n - r + 1)) :
-  (A : ℚ) / (nat.choose n r) ≤ B / nat.choose n (r-1) :=
+  (h : A * r ≤ B * (n - r + 1)) : (A : ℚ) / (nat.choose n r) ≤ B / nat.choose n (r-1) :=
 begin
   rw div_le_div_iff; norm_cast,
   apply le_of_mul_le_mul_right _,
@@ -136,7 +135,7 @@ end
 def the_pairs (𝒜 : finset (finset X)) : finset (finset X × finset X) :=
 𝒜.bind $ λ A, (all_removals A).map ⟨λ x, (A,x), λ _ _, by simp⟩
 
-lemma card_the_pairs (𝒜 : finset (finset X)) : is_layer 𝒜 r → (the_pairs 𝒜).card = 𝒜.card * r :=
+lemma card_the_pairs {r : ℕ} (𝒜 : finset (finset X)) : is_layer 𝒜 r → (the_pairs 𝒜).card = 𝒜.card * r :=
 begin
   intro,
   rw [the_pairs, card_bind],
@@ -205,7 +204,7 @@ begin
   apply insert_erase ih
 end
 
-lemma card_from_below {n : ℕ} (𝒜 : finset (finset X)) {h : card X = n}: is_layer 𝒜 (r+1) → (from_below 𝒜).card ≤ (∂𝒜).card * (n - r) :=
+lemma card_from_below {n r : ℕ} (𝒜 : finset (finset X)) {h : card X = n}: is_layer 𝒜 (r+1) → (from_below 𝒜).card ≤ (∂𝒜).card * (n - r) :=
 begin
   intro,
   rw [from_below],
@@ -219,7 +218,7 @@ begin
       intro, exact (n-r),
     intros,
     rw [card_map, card_attach, card_sdiff (subset_univ _), card_univ, h],
-    have := shadow_layer 𝒜 a _ H,
+    have := shadow_layer a _ H,
     rw this,
   simp
 end
@@ -232,7 +231,7 @@ begin
   transitivity,
     apply card_le_of_subset (above_sub_below _),
   transitivity, 
-    apply @card_from_below _ _ _ (r-1) _ _ hn,
+    apply @card_from_below _ _ _ _ (r-1) _ hn,
     rw nat.sub_add_cancel hr1,
     exact H,
   rw nat.sub_sub_assoc hr2 hr1,
@@ -486,7 +485,7 @@ begin
   finish [mem_ar]
 end
 
-variables {n : ℕ} {𝒜 : finset (finset (fin n))}
+variables {𝒜 : finset (finset (fin n))}
 
 def compress (A : finset (fin n)) (i j : fin n) : finset (fin n) := 
 if (j ∈ A ∧ i ∉ A)
