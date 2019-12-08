@@ -18,22 +18,22 @@ def example1 : finset (finset (fin 5)) :=
 { {0,1,2}, {0,1,3}, {0,2,3}, {0,2,4} } 
 
 section layers
-  def is_layer (𝒜 : finset (finset X)) (r : ℕ) : Prop := ∀ A ∈ 𝒜, finset.card A = r
+  def is_layer (𝒜 : finset (finset X)) (r : ℕ) : Prop := ∀ A ∈ 𝒜, card A = r
 
   lemma union_layer {A B : finset (finset X)} {r : ℕ} : is_layer A r ∧ is_layer B r ↔ is_layer (A ∪ B) r :=
   begin
     split; intros p, 
       rw is_layer,
       intros,
-      rw finset.mem_union at H,
+      rw mem_union at H,
       cases H,
         exact (p.1 _ H),
         exact (p.2 _ H),
     split,
-    all_goals {rw is_layer, intros, apply p, rw finset.mem_union, tauto}, 
+    all_goals {rw is_layer, intros, apply p, rw mem_union, tauto}, 
   end
 
-  lemma powerset_len_iff_is_layer {𝒜 : finset (finset X)} {r : ℕ} : is_layer 𝒜 r ↔ 𝒜 ⊆ finset.powerset_len r (elems X) :=
+  lemma powerset_len_iff_is_layer {𝒜 : finset (finset X)} {r : ℕ} : is_layer 𝒜 r ↔ 𝒜 ⊆ powerset_len r (elems X) :=
   begin
     split; intros p A h,
       rw mem_powerset_len_iff_card,
@@ -42,11 +42,11 @@ section layers
     exact p h
   end
 
-  lemma size_in_layer {𝒜 : finset (finset X)} {r : ℕ} (h : is_layer 𝒜 r) : finset.card 𝒜 ≤ nat.choose (card X) r :=
+  lemma size_in_layer {𝒜 : finset (finset X)} {r : ℕ} (h : is_layer 𝒜 r) : card 𝒜 ≤ nat.choose (card X) r :=
   begin
-    rw [fintype.card, ← finset.card_powerset_len],
-    apply finset.card_le_of_subset,
-    rwa [finset.univ, ← powerset_len_iff_is_layer]
+    rw [fintype.card, ← card_powerset_len],
+    apply card_le_of_subset,
+    rwa [univ, ← powerset_len_iff_is_layer]
   end
 end layers
 
@@ -55,25 +55,25 @@ A.attach.map ⟨λ i, erase A i.1,
 begin
   rintro ⟨x1, x1p⟩ ⟨x2, x2p⟩ _,
   congr, dsimp at a,
-  have: x1 ∉ finset.erase A x1 := finset.not_mem_erase _ _,
-  finish [a, finset.mem_erase],
+  have: x1 ∉ erase A x1 := not_mem_erase _ _,
+  finish [a, mem_erase],
 end
 ⟩
 
-lemma all_removals_size (A : finset X) (h : A.card = r) : is_layer (all_removals A) (r-1) := 
+lemma all_removals_size {A : finset X} (h : A.card = r) : is_layer (all_removals A) (r-1) := 
 begin
-  intros _ _,
-  rw [all_removals, finset.mem_map] at H,
+  intros _ H,
+  rw [all_removals, mem_map] at H,
   rcases H with ⟨⟨_, p⟩, _, k⟩,
   dsimp at k,
-  rw [← k, finset.card_erase_of_mem p, h],
+  rw [← k, card_erase_of_mem p, ‹A.card = r›],
   refl
 end
 
 def mem_all_removals {A : finset X} {B : finset X} : B ∈ all_removals A ↔ ∃ i ∈ A, erase A i = B :=
 by simp [all_removals]
 
-lemma card_all_removals {A : finset X} {H : finset.card A = r} : (all_removals A).card = r :=
+lemma card_all_removals {A : finset X} {H : card A = r} : (all_removals A).card = r :=
 by rw [all_removals, card_map, card_attach, H]
 
 def shadow (𝒜 : finset (finset X)) : finset (finset X) := 
@@ -100,11 +100,10 @@ end
 
 lemma shadow_layer (𝒜 : finset (finset X)) : is_layer 𝒜 r → is_layer (∂𝒜) (r-1) :=
 begin
-  intros a _ H,
-  simp [shadow] at H,
-  rcases H with ⟨A, ⟨_, _⟩⟩,
-  apply all_removals_size A (a _ ‹_›),
-  tauto
+  intros a A H,
+  rw [shadow, mem_bind] at H,
+  rcases H with ⟨B, _, _⟩,
+  refine all_removals_size (a _ ‹_›) _ ‹A ∈ all_removals B›,
 end
 
 def sub_of_shadow {𝒜 : finset (finset X)} (B : finset X) : B ∈ shadow 𝒜 → ∃ A ∈ 𝒜, B ⊆ A :=
@@ -114,7 +113,7 @@ begin
   rcases k with ⟨A, H, _, _, k⟩,
   use A, use H,
   rw ← k,
-  apply finset.erase_subset
+  apply erase_subset
 end
 
 lemma multiply_out {A B n r : ℕ} (hr1 : 1 ≤ r) (hr2 : r ≤ n)
@@ -140,42 +139,42 @@ def the_pairs (𝒜 : finset (finset X)) : finset (finset X × finset X) :=
 lemma card_the_pairs (𝒜 : finset (finset X)) : is_layer 𝒜 r → (the_pairs 𝒜).card = 𝒜.card * r :=
 begin
   intro,
-  rw [the_pairs, finset.card_bind],
+  rw [the_pairs, card_bind],
   transitivity,
-      apply (finset.sum_congr rfl _),
+      apply (sum_congr rfl _),
         intro, exact r,
       intros,
-      rw [finset.card_map, card_all_removals],
+      rw [card_map, card_all_removals],
       refine (a _ H),
-    rw [← nat.smul_eq_mul, ← finset.sum_const],
+    rw [← nat.smul_eq_mul, ← sum_const],
   intros,
-  rw finset.disjoint_iff_ne, finish
+  rw disjoint_iff_ne, finish
 end
 
 def from_below (𝒜 : finset (finset X)) : finset (finset X × finset X) :=
-(∂𝒜).bind (λ B, (finset.univ \ B).attach.map ⟨λ x, (insert x.1 B, B), 
+(∂𝒜).bind (λ B, (univ \ B).attach.map ⟨λ x, (insert x.1 B, B), 
 begin
   rintros ⟨x1, x1h⟩ ⟨x2, x2h⟩ h,
   injection h, congr,
-  have q := finset.mem_insert_self x1 B,
-  rw [h_1, finset.mem_insert] at q,
-  rw finset.mem_sdiff at x1h,
+  have q := mem_insert_self x1 B,
+  rw [h_1, mem_insert] at q,
+  rw mem_sdiff at x1h,
   tauto
 end
 ⟩)
 
 lemma mem_the_pairs (𝒜 : finset (finset X)) (A B : finset X) : (A,B) ∈ the_pairs 𝒜 ↔ A ∈ 𝒜 ∧ B ∈ all_removals A :=
 begin
-  rw [the_pairs, finset.mem_bind],
+  rw [the_pairs, mem_bind],
   split; intro h,
     rcases h with ⟨a, Ha, h⟩,
-    rw finset.mem_map at h,
+    rw mem_map at h,
     rcases h with ⟨b, Hb, h⟩,
     injection h with Ah Bh,
     rw [Ah, Bh] at *,
     exact ⟨Ha, Hb⟩,
   refine ⟨A, h.1, _⟩,
-  rw finset.mem_map,
+  rw mem_map,
   tauto
 end
 
@@ -183,16 +182,16 @@ lemma mem_from_below {𝒜 : finset (finset X)} (A B : finset X) :
   A ∈ 𝒜 ∧ (∃ (i ∉ B), insert i B = A) → (A,B) ∈ from_below 𝒜 :=
 begin
   intro,
-  rw [from_below, finset.mem_bind],
+  rw [from_below, mem_bind],
   rcases a with ⟨Ah, i, ih, a⟩,
   refine ⟨B, _, _⟩,
     rw mem_shadow,
     refine ⟨A, Ah, i, _, _⟩;
     rw ← a,
-    apply finset.mem_insert_self,
-    apply finset.erase_insert ih,
-  rw finset.mem_map,
-  refine ⟨⟨i, finset.mem_sdiff.2 ⟨complete _, ih⟩⟩, finset.mem_attach _ _, by simpa⟩
+    apply mem_insert_self,
+    apply erase_insert ih,
+  rw mem_map,
+  refine ⟨⟨i, mem_sdiff.2 ⟨complete _, ih⟩⟩, mem_attach _ _, by simpa⟩
 end
 
 lemma above_sub_below (𝒜 : finset (finset X)) : the_pairs 𝒜 ⊆ from_below 𝒜 :=
@@ -202,8 +201,8 @@ begin
   apply mem_from_below,
   rcases h with ⟨Ah, i, ih, AeB⟩,
   refine ⟨Ah, i, _, _⟩; rw ← AeB,
-  apply finset.not_mem_erase,
-  apply finset.insert_erase ih
+  apply not_mem_erase,
+  apply insert_erase ih
 end
 
 lemma card_from_below {n : ℕ} (𝒜 : finset (finset X)) {h : card X = n}: is_layer 𝒜 (r+1) → (from_below 𝒜).card ≤ (∂𝒜).card * (n - r) :=
@@ -211,15 +210,15 @@ begin
   intro,
   rw [from_below],
   transitivity,
-    apply finset.card_bind_le,
+    apply card_bind_le,
   apply ge_of_eq,
   symmetry,
-  rw [← nat.smul_eq_mul, ← finset.sum_const],
+  rw [← nat.smul_eq_mul, ← sum_const],
   transitivity,
-    apply finset.sum_congr rfl _,
+    apply sum_congr rfl _,
       intro, exact (n-r),
     intros,
-    rw [finset.card_map, finset.card_attach, finset.card_sdiff (finset.subset_univ _), finset.card_univ, h],
+    rw [card_map, card_attach, card_sdiff (subset_univ _), card_univ, h],
     have := shadow_layer 𝒜 a _ H,
     rw this,
   simp
@@ -231,7 +230,7 @@ begin
   apply multiply_out hr1 hr2,
   rw ← card_the_pairs _ H,
   transitivity,
-    apply finset.card_le_of_subset (above_sub_below _),
+    apply card_le_of_subset (above_sub_below _),
   transitivity, 
     apply @card_from_below _ _ _ (r-1) _ _ hn,
     rw nat.sub_add_cancel hr1,
@@ -239,13 +238,13 @@ begin
   rw nat.sub_sub_assoc hr2 hr1,
 end
 
-def ar (𝒜 : finset (finset X)) (r : ℕ) : finset (finset X) := 𝒜.filter (λ i, finset.card i = r)
+def ar (𝒜 : finset (finset X)) (r : ℕ) : finset (finset X) := 𝒜.filter (λ i, card i = r)
 
 reserve infix `#`:100
 notation 𝒜#r := ar 𝒜 r
 
 lemma mem_ar {𝒜 : finset (finset X)} (r : ℕ) (A : finset X) : A ∈ 𝒜#r ↔ A ∈ 𝒜 ∧ A.card = r :=
-by rw [ar, finset.mem_filter]
+by rw [ar, mem_filter]
 
 lemma layered_ar (𝒜 : finset (finset X)) (r : ℕ) : is_layer (𝒜#r) r :=
 begin
@@ -273,7 +272,7 @@ begin
   apply k
 end
 
-lemma card_decompose' (𝒜 : finset (finset X)) (k n : ℕ) (h : card X = n) : finset.card (decompose' n 𝒜 k) ≤ nat.choose n (n-k) :=
+lemma card_decompose' (𝒜 : finset (finset X)) (k n : ℕ) (h : card X = n) : card (decompose' n 𝒜 k) ≤ nat.choose n (n-k) :=
 begin
   have := size_in_layer (decompose'_layer _ _),
   rwa h at this
@@ -296,7 +295,7 @@ begin
     have := hA.2,
     clear H h _inst_1 _inst_2 hB hA k a A B 𝒜,
     omega,
-  rw finset.mem_union at hB,
+  rw mem_union at hB,
   cases hB,
     rw [mem_ar] at *,
     apply H _ hA.1 _ hB.1 _ k,
@@ -309,15 +308,15 @@ begin
 end
 
 lemma card_decompose'_other (𝒜 : finset (finset X)) (k n : ℕ) (hk : k ≤ n) (h : card X = n) (H : antichain 𝒜) : 
-  finset.sum (finset.range (k+1)) (λ r, ((𝒜#(n-r)).card : ℚ) / nat.choose n (n-r)) ≤ ((decompose' n 𝒜 k).card : ℚ) / nat.choose n (n-k) :=
+  sum (range (k+1)) (λ r, ((𝒜#(n-r)).card : ℚ) / nat.choose n (n-r)) ≤ ((decompose' n 𝒜 k).card : ℚ) / nat.choose n (n-k) :=
 begin
   induction k with k ih,
-    rw [finset.sum_range_one, div_le_div_iff]; norm_cast, exact nat.choose_pos (nat.sub_le _ _), exact nat.choose_pos (nat.sub_le _ _),
-  rw finset.sum_range_succ,
+    rw [sum_range_one, div_le_div_iff]; norm_cast, exact nat.choose_pos (nat.sub_le _ _), exact nat.choose_pos (nat.sub_le _ _),
+  rw sum_range_succ,
   rw decompose',
   have: (𝒜#(n - (k + 1)) ∪ ∂decompose' n 𝒜 k).card = (𝒜#(n - (k + 1))).card + (∂decompose' n 𝒜 k).card,
-    apply finset.card_disjoint_union,
-    rw finset.disjoint_iff_ne,
+    apply card_disjoint_union,
+    rw disjoint_iff_ne,
     intros A hA B hB m,
     apply antichain_prop hk (lt_add_one k) h H A hA B hB,
     rw m, refl,
@@ -348,30 +347,30 @@ begin
   rwa nat.sub_sub_self hr at this
 end
 
-lemma sum_flip {α : Type*} [add_comm_monoid α] {n : ℕ} (f : ℕ → α) : finset.sum (finset.range (n+1)) (λ r, f (n - r)) = finset.sum (finset.range (n+1)) (λ r, f r) :=
+lemma sum_flip {α : Type*} [add_comm_monoid α] {n : ℕ} (f : ℕ → α) : sum (range (n+1)) (λ r, f (n - r)) = sum (range (n+1)) (λ r, f r) :=
 begin
   induction n with n ih,
-    rw [finset.sum_range_one, finset.sum_range_one],
-  rw finset.sum_range_succ',
-  rw finset.sum_range_succ _ (nat.succ n),
+    rw [sum_range_one, sum_range_one],
+  rw sum_range_succ',
+  rw sum_range_succ _ (nat.succ n),
   simp [ih]
 end
 
 lemma card_decompose_other (𝒜 : finset (finset X)) (r n : ℕ) (h : card X = n) (H : antichain 𝒜) : 
-  (finset.range (n+1)).sum (λ r, ((𝒜#r).card : ℚ) / nat.choose n r) ≤ (decompose n 𝒜 0).card / nat.choose n 0 :=
+  (range (n+1)).sum (λ r, ((𝒜#r).card : ℚ) / nat.choose n r) ≤ (decompose n 𝒜 0).card / nat.choose n 0 :=
 begin
   rw decompose,
   rw nat.sub_zero,
   by calc 
-    (finset.range (n + 1)).sum (λ r, ((𝒜#r).card : ℚ) / nat.choose n r) 
-          = (finset.range (n + 1)).sum (λ r, ((𝒜#(n-r)).card : ℚ) / nat.choose n (n-r)) 
+    (range (n + 1)).sum (λ r, ((𝒜#r).card : ℚ) / nat.choose n r) 
+          = (range (n + 1)).sum (λ r, ((𝒜#(n-r)).card : ℚ) / nat.choose n (n-r)) 
                                             : by rw sum_flip (λ r, ((𝒜#r).card : ℚ) / nat.choose n r)
       ... ≤ ((decompose' n 𝒜 n).card : ℚ) / nat.choose n (n-n) : begin apply card_decompose'_other, refl, assumption, assumption end
       ... ≤ (decompose' n 𝒜 n).card / nat.choose n 0 : by simp
 end
 
 lemma lubell_yamamoto_meshalkin (n : ℕ) (𝒜 : finset (finset (fin n))) (H : antichain 𝒜) :
-  (finset.range (n+1)).sum (λ r, ((𝒜#r).card : ℚ) / nat.choose n r) ≤ 1 :=
+  (range (n+1)).sum (λ r, ((𝒜#r).card : ℚ) / nat.choose n r) ≤ 1 :=
 begin
   transitivity,
     apply card_decompose_other _ n _ (card_fin _) H,
@@ -445,13 +444,13 @@ begin
   have q1 := lubell_yamamoto_meshalkin n 𝒜 H,
   set f := (λ (r : ℕ), ((𝒜#r).card : ℚ) / nat.choose n r),
   set g := (λ (r : ℕ), ((𝒜#r).card : ℚ) / nat.choose n (n/2)),
-  have q2 : finset.sum (finset.range (n + 1)) g ≤ finset.sum (finset.range (n + 1)) f,
-    apply finset.sum_le_sum,
+  have q2 : sum (range (n + 1)) g ≤ sum (range (n + 1)) f,
+    apply sum_le_sum,
     intros r hr,
     apply div_le_div_of_le_left; norm_cast,
         apply zero_le,
       apply nat.choose_pos,
-      rw finset.mem_range at hr,
+      rw mem_range at hr,
       rwa ← nat.lt_succ_iff,
     apply dominate_choose,
   have := trans q2 q1,
@@ -459,30 +458,30 @@ begin
   have q: g = h,
     ext r,
     apply test.symm,
-  rw [q, ← finset.sum_mul, one_div_eq_inv, ← div_eq_mul_inv, div_le_iff] at this,
+  rw [q, ← sum_mul, one_div_eq_inv, ← div_eq_mul_inv, div_le_iff] at this,
     swap, norm_cast, apply nat.choose_pos, apply nat.div_le_self',
-  rw [one_mul, ← finset.sum_nat_cast] at this,
+  rw [one_mul, ← sum_nat_cast] at this,
   norm_cast at this,
-  rw ← finset.card_bind at this,
-    suffices m: finset.bind (finset.range (n + 1)) (λ (u : ℕ), 𝒜#u) = 𝒜,
+  rw ← card_bind at this,
+    suffices m: finset.bind (range (n + 1)) (λ (u : ℕ), 𝒜#u) = 𝒜,
       rwa m at this,
     ext,
-    rw finset.mem_bind,
+    rw mem_bind,
     split, rintro ⟨_,_,q⟩,
       rw mem_ar at q,
       exact q.1,
     intro A, 
     use a.card,
     refine ⟨_, _⟩,
-      rw finset.mem_range,
-      have k: a.card ≤ (elems (fin n)).card := finset.card_le_of_subset (finset.subset_univ _),
-      have: finset.card (elems (fin n)) = fintype.card (fin n), rw [fintype.card, finset.univ],
+      rw mem_range,
+      have k: a.card ≤ (elems (fin n)).card := card_le_of_subset (subset_univ _),
+      have: card (elems (fin n)) = fintype.card (fin n), rw [fintype.card, univ],
       rw [this, card_fin] at k,
       rwa nat.lt_succ_iff,
     rw mem_ar,
     tauto,
   intros x _ y _ ne,
-  rw finset.disjoint_left,
+  rw disjoint_left,
   intros a Ha,
   finish [mem_ar]
 end
