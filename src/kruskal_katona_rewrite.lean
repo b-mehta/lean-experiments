@@ -17,36 +17,38 @@ by intro x; rw mem_powerset_len; exact and_iff_right (subset_univ _)
 def example1 : finset (finset (fin 5)) :=
 { {0,1,2}, {0,1,3}, {0,2,3}, {0,2,4} } 
 
-def is_layer (𝒜 : finset (finset X)) (r : ℕ) : Prop := ∀ A ∈ 𝒜, finset.card A = r
+section layers
+  def is_layer (𝒜 : finset (finset X)) (r : ℕ) : Prop := ∀ A ∈ 𝒜, finset.card A = r
 
-lemma union_layer {A B : finset (finset X)} {r : ℕ} : is_layer A r ∧ is_layer B r ↔ is_layer (A ∪ B) r :=
-begin
-  split; intros p, 
-    rw is_layer,
-    intros,
-    rw finset.mem_union at H,
-    cases H,
-      exact (p.1 _ H),
-      exact (p.2 _ H),
-  split,
-  all_goals {rw is_layer, intros, apply p, rw finset.mem_union, tauto}, 
-end
+  lemma union_layer {A B : finset (finset X)} {r : ℕ} : is_layer A r ∧ is_layer B r ↔ is_layer (A ∪ B) r :=
+  begin
+    split; intros p, 
+      rw is_layer,
+      intros,
+      rw finset.mem_union at H,
+      cases H,
+        exact (p.1 _ H),
+        exact (p.2 _ H),
+    split,
+    all_goals {rw is_layer, intros, apply p, rw finset.mem_union, tauto}, 
+  end
 
-lemma powerset_len_iff_is_layer (𝒜 : finset (finset X)) (r : ℕ) : is_layer 𝒜 r ↔ 𝒜 ⊆ finset.powerset_len r (elems X) :=
-begin
-  split; intros p A h,
-    rw mem_powerset_len_iff_card,
-    exact (p _ h),
-  rw ← mem_powerset_len_iff_card, 
-  exact p h
-end
+  lemma powerset_len_iff_is_layer {𝒜 : finset (finset X)} {r : ℕ} : is_layer 𝒜 r ↔ 𝒜 ⊆ finset.powerset_len r (elems X) :=
+  begin
+    split; intros p A h,
+      rw mem_powerset_len_iff_card,
+      exact (p _ h),
+    rw ← mem_powerset_len_iff_card, 
+    exact p h
+  end
 
-lemma size_in_layer (𝒜 : finset (finset X)) (r : ℕ) (h : is_layer 𝒜 r) : finset.card 𝒜 ≤ nat.choose (card X) r :=
-begin
-  rw [fintype.card, ← finset.card_powerset_len],
-  apply finset.card_le_of_subset,
-  rwa [finset.univ, ← powerset_len_iff_is_layer]
-end
+  lemma size_in_layer {𝒜 : finset (finset X)} {r : ℕ} (h : is_layer 𝒜 r) : finset.card 𝒜 ≤ nat.choose (card X) r :=
+  begin
+    rw [fintype.card, ← finset.card_powerset_len],
+    apply finset.card_le_of_subset,
+    rwa [finset.univ, ← powerset_len_iff_is_layer]
+  end
+end layers
 
 def all_removals (A : finset X) : finset (finset X) :=
 A.attach.map ⟨λ i, erase A i.1, 
@@ -254,6 +256,7 @@ end
 
 def antichain (𝒜 : finset (finset X)) : Prop := ∀ A ∈ 𝒜, ∀ B ∈ 𝒜, A ≠ B → ¬(A ⊆ B)
 
+-- TODO: consider rewriting all these using nat.decreasing_induction
 def decompose' (n : ℕ) (𝒜 : finset (finset X)) : Π (k : ℕ), finset (finset X)
   | 0 := 𝒜#n
   | (k+1) := 𝒜#(n - (k+1)) ∪ shadow (decompose' k)
@@ -272,7 +275,7 @@ end
 
 lemma card_decompose' (𝒜 : finset (finset X)) (k n : ℕ) (h : card X = n) : finset.card (decompose' n 𝒜 k) ≤ nat.choose n (n-k) :=
 begin
-  have := size_in_layer (decompose' n 𝒜 k) (n-k) (decompose'_layer _ _),
+  have := size_in_layer (decompose'_layer _ _),
   rwa h at this
 end
 
