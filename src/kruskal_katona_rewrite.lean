@@ -9,6 +9,8 @@ open finset
 variables {X : Type*}
 variables [fintype X] [decidable_eq X]
 variables {n : ℕ}
+local notation `X` := fin n
+variables {𝒜 : finset (finset X)}
 
 lemma mem_powerset_len_iff_card {r : ℕ} : ∀ (x : finset X), x ∈ powerset_len r (elems X) ↔ card x = r :=
 by intro x; rw mem_powerset_len; exact and_iff_right (subset_univ _)
@@ -17,9 +19,11 @@ def example1 : finset (finset (fin 5)) :=
 { {0,1,2}, {0,1,3}, {0,2,3}, {0,2,4} } 
 
 section layers
+  variables {r : ℕ}
+
   def is_layer (𝒜 : finset (finset X)) (r : ℕ) : Prop := ∀ A ∈ 𝒜, card A = r
 
-  lemma union_layer {A B : finset (finset X)} {r : ℕ} : is_layer A r ∧ is_layer B r ↔ is_layer (A ∪ B) r :=
+  lemma union_layer {A B : finset (finset X)} : is_layer A r ∧ is_layer B r ↔ is_layer (A ∪ B) r :=
   begin
     split; intros p, 
       rw is_layer,
@@ -32,7 +36,7 @@ section layers
     all_goals {rw is_layer, intros, apply p, rw mem_union, tauto}, 
   end
 
-  lemma powerset_len_iff_is_layer {𝒜 : finset (finset X)} {r : ℕ} : is_layer 𝒜 r ↔ 𝒜 ⊆ powerset_len r (elems X) :=
+  lemma powerset_len_iff_is_layer : is_layer 𝒜 r ↔ 𝒜 ⊆ powerset_len r (elems X) :=
   begin
     split; intros p A h,
       rw mem_powerset_len_iff_card,
@@ -41,7 +45,7 @@ section layers
     exact p h
   end
 
-  lemma size_in_layer {𝒜 : finset (finset X)} {r : ℕ} (h : is_layer 𝒜 r) : card 𝒜 ≤ nat.choose (card X) r :=
+  lemma size_in_layer (h : is_layer 𝒜 r) : card 𝒜 ≤ nat.choose (card X) r :=
   begin
     rw [fintype.card, ← card_powerset_len],
     apply card_le_of_subset,
@@ -82,10 +86,10 @@ section shadow
   reserve prefix `∂`:90
   notation ∂𝒜 := shadow 𝒜
 
-  def mem_shadow {𝒜 : finset (finset X)} (B : finset X) : B ∈ shadow 𝒜 ↔ ∃ A ∈ 𝒜, ∃ i ∈ A, erase A i = B := 
+  def mem_shadow (B : finset X) : B ∈ shadow 𝒜 ↔ ∃ A ∈ 𝒜, ∃ i ∈ A, erase A i = B := 
   by simp [shadow, all_removals]
 
-  def mem_shadow' {𝒜 : finset (finset X)} {B : finset X} : B ∈ shadow 𝒜 ↔ ∃ j ∉ B, insert j B ∈ 𝒜 :=
+  def mem_shadow' {B : finset X} : B ∈ shadow 𝒜 ↔ ∃ j ∉ B, insert j B ∈ 𝒜 :=
   begin
     rw mem_shadow,
     split,
@@ -98,7 +102,7 @@ section shadow
       rw erase_insert Hi
   end
 
-  lemma shadow_layer {r : ℕ} {𝒜 : finset (finset X)} : is_layer 𝒜 r → is_layer (∂𝒜) (r-1) :=
+  lemma shadow_layer {r : ℕ} : is_layer 𝒜 r → is_layer (∂𝒜) (r-1) :=
   begin
     intros a A H,
     rw [shadow, mem_bind] at H,
@@ -106,7 +110,7 @@ section shadow
     refine all_removals_size (a _ ‹_›) _ ‹A ∈ all_removals B›,
   end
 
-  def sub_of_shadow {𝒜 : finset (finset X)} {B : finset X} : B ∈ ∂𝒜 → ∃ A ∈ 𝒜, B ⊆ A :=
+  def sub_of_shadow {B : finset X} : B ∈ ∂𝒜 → ∃ A ∈ 𝒜, B ⊆ A :=
   begin
     intro k,
     rw mem_shadow at k,
@@ -163,7 +167,7 @@ section local_lym
   end
   ⟩)
 
-  lemma mem_the_pairs (𝒜 : finset (finset X)) (A B : finset X) : (A,B) ∈ the_pairs 𝒜 ↔ A ∈ 𝒜 ∧ B ∈ all_removals A :=
+  lemma mem_the_pairs (A B : finset X) : (A,B) ∈ the_pairs 𝒜 ↔ A ∈ 𝒜 ∧ B ∈ all_removals A :=
   begin
     rw [the_pairs, mem_bind],
     split; intro h,
@@ -178,8 +182,7 @@ section local_lym
     tauto
   end
 
-  lemma mem_from_below {𝒜 : finset (finset X)} (A B : finset X) :
-    A ∈ 𝒜 ∧ (∃ (i ∉ B), insert i B = A) → (A,B) ∈ from_below 𝒜 :=
+  lemma mem_from_below (A B : finset X) : A ∈ 𝒜 ∧ (∃ (i ∉ B), insert i B = A) → (A,B) ∈ from_below 𝒜 :=
   begin
     intro,
     rw [from_below, mem_bind],
@@ -202,7 +205,7 @@ section local_lym
     apply insert_erase ih
   end
 
-  lemma card_from_below {n r : ℕ} (𝒜 : finset (finset X)) {h : card X = n}: is_layer 𝒜 (r+1) → (from_below 𝒜).card ≤ (∂𝒜).card * (n - r) :=
+  lemma card_from_below (r : ℕ) : is_layer 𝒜 r → (from_below 𝒜).card ≤ (∂𝒜).card * (n - (r - 1)) :=
   begin
     intro,
     rw [from_below],
@@ -212,21 +215,18 @@ section local_lym
     rw [← nat.smul_eq_mul, ← sum_const],
     apply sum_congr rfl,
     intros, 
-    rw [card_map, card_attach, card_sdiff (subset_univ _), card_univ, h, shadow_layer a _ H, nat.add_sub_cancel]
+    rw [card_map, card_attach, card_sdiff (subset_univ _), card_univ, card_fin, shadow_layer a _ H]
   end
 
-  theorem local_lym {n r : ℕ} {𝒜 : finset (finset X)} (hn : card X = n) (hr1 : r ≥ 1) (hr2 : r ≤ n) (H : is_layer 𝒜 r):
+  theorem local_lym {r : ℕ} (hr1 : r ≥ 1) (hr2 : r ≤ n) (H : is_layer 𝒜 r):
     (𝒜.card : ℚ) / nat.choose n r ≤ (∂𝒜).card / nat.choose n (r-1) :=
   begin
     apply multiply_out hr1 hr2,
     rw ← card_the_pairs _ H,
     transitivity,
       apply card_le_of_subset (above_sub_below _),
-    transitivity, 
-      apply @card_from_below _ _ _ _ (r-1) _ hn,
-      rw nat.sub_add_cancel hr1,
-      exact H,
-    rw nat.sub_sub_assoc hr2 hr1,
+    rw ← nat.sub_sub_assoc hr2 hr1,
+    apply card_from_below _ H
   end
 end local_lym
 
@@ -236,7 +236,7 @@ section slice
   reserve infix `#`:100
   notation 𝒜#r := slice 𝒜 r
 
-  lemma mem_slice {𝒜 : finset (finset X)} {r : ℕ} {A : finset X} : A ∈ 𝒜#r ↔ A ∈ 𝒜 ∧ A.card = r :=
+  lemma mem_slice {r : ℕ} {A : finset X} : A ∈ 𝒜#r ↔ A ∈ 𝒜 ∧ A.card = r :=
   by rw [slice, mem_filter]
 
   lemma layered_slice (𝒜 : finset (finset X)) (r : ℕ) : is_layer (𝒜#r) r :=
@@ -246,7 +246,7 @@ section slice
     tauto
   end
 
-  lemma ne_of_diff_slice {𝒜 : finset (finset X)} {r₁ r₂ : ℕ} {A₁ A₂ : finset X} (h₁ : A₁ ∈ 𝒜#r₁) (h₂ : A₂ ∈ 𝒜#r₂) : r₁ ≠ r₂ → A₁ ≠ A₂ :=
+  lemma ne_of_diff_slice {r₁ r₂ : ℕ} {A₁ A₂ : finset X} (h₁ : A₁ ∈ 𝒜#r₁) (h₂ : A₂ ∈ 𝒜#r₂) : r₁ ≠ r₂ → A₁ ≠ A₂ :=
   begin
     intros A' r,
     rw r at *,
@@ -258,11 +258,11 @@ end slice
 section lym
   def antichain (𝒜 : finset (finset X)) : Prop := ∀ A ∈ 𝒜, ∀ B ∈ 𝒜, A ≠ B → ¬(A ⊆ B)
 
-  def decompose' (n : ℕ) (𝒜 : finset (finset X)) : Π (k : ℕ), finset (finset X)
+  def decompose' (𝒜 : finset (finset X)) : Π (k : ℕ), finset (finset X)
     | 0 := 𝒜#n
     | (k+1) := 𝒜#(n - (k+1)) ∪ shadow (decompose' k)
 
-  def decompose'_layer (n : ℕ) (𝒜 : finset (finset X)) (k : ℕ) : is_layer (decompose' n 𝒜 k) (n-k) :=
+  def decompose'_layer (𝒜 : finset (finset X)) (k : ℕ) : is_layer (decompose' 𝒜 k) (n-k) :=
   begin
     induction k with k ih;
       rw decompose',
@@ -273,13 +273,12 @@ section lym
     apply shadow_layer ih,
   end
 
-  theorem antichain_prop {𝒜 : finset (finset X)} {r k n : ℕ} (hk : k ≤ n) (hr : r < k) 
-    (h : card X = n) (H : antichain 𝒜) :
-  ∀ A ∈ 𝒜#(n - k), ∀ B ∈ ∂decompose' n 𝒜 r, ¬(A ⊆ B) :=
+  theorem antichain_prop {r k : ℕ} (hk : k ≤ n) (hr : r < k) (H : antichain 𝒜) :
+  ∀ A ∈ 𝒜#(n - k), ∀ B ∈ ∂decompose' 𝒜 r, ¬(A ⊆ B) :=
   begin
     intros A HA B HB k,
     rcases sub_of_shadow HB with ⟨C, HC, _⟩,
-    replace k := trans k ‹B ⊆ C›, clear HB h_1_h B,
+    replace k := trans k ‹B ⊆ C›, clear HB h_h B,
     induction r with r ih generalizing A C;
     rw decompose' at HC,
     any_goals { rw mem_union at HC, cases HC },
@@ -292,40 +291,40 @@ section lym
     refine ih (nat.lt_of_succ_lt hr) _ _ HA HB' (trans k_1 HB'')
   end
 
-  lemma disjoint_of_antichain {𝒜 : finset (finset X)} {k n : ℕ} (hk : k + 1 ≤ n) (h : card X = n) (H : antichain 𝒜) : disjoint (𝒜#(n - (k + 1))) (∂decompose' n 𝒜 k) := 
-  disjoint_left.2 $ λ A HA HB, antichain_prop hk (lt_add_one k) h H A HA A HB (subset.refl _)
+  lemma disjoint_of_antichain {k : ℕ} (hk : k + 1 ≤ n) (H : antichain 𝒜) : disjoint (𝒜#(n - (k + 1))) (∂decompose' 𝒜 k) := 
+  disjoint_left.2 $ λ A HA HB, antichain_prop hk (lt_add_one k) H A HA A HB (subset.refl _)
 
-  lemma card_decompose'_other {𝒜 : finset (finset X)} {k n : ℕ} (hk : k ≤ n) (h : card X = n) (H : antichain 𝒜) : 
-    sum (range (k+1)) (λ r, ((𝒜#(n-r)).card : ℚ) / nat.choose n (n-r)) ≤ ((decompose' n 𝒜 k).card : ℚ) / nat.choose n (n-k) :=
+  lemma card_decompose'_other {k : ℕ} (hk : k ≤ n) (H : antichain 𝒜) : 
+    sum (range (k+1)) (λ r, ((𝒜#(n-r)).card : ℚ) / nat.choose n (n-r)) ≤ ((decompose' 𝒜 k).card : ℚ) / nat.choose n (n-k) :=
   begin
     induction k with k ih,
       rw [sum_range_one, div_le_div_iff]; norm_cast, exact nat.choose_pos (nat.sub_le _ _), exact nat.choose_pos (nat.sub_le _ _),
     rw [sum_range_succ, decompose'],
-    have: (𝒜#(n - (k + 1)) ∪ ∂decompose' n 𝒜 k).card = (𝒜#(n - (k + 1))).card + (∂decompose' n 𝒜 k).card,
+    have: (𝒜#(n - (k + 1)) ∪ ∂decompose' 𝒜 k).card = (𝒜#(n - (k + 1))).card + (∂decompose' 𝒜 k).card,
       apply card_disjoint_union,
       rw disjoint_iff_ne,
       intros A hA B hB m,
-      apply antichain_prop hk (lt_add_one k) h H A hA B hB,
+      apply antichain_prop hk (lt_add_one k) H A hA B hB,
       rw m, refl,
     rw this,
-    have: ↑((𝒜#(n - (k + 1))).card + (∂decompose' n 𝒜 k).card) / (nat.choose n (n - nat.succ k) : ℚ) = 
-          ((𝒜#(n - (k + 1))).card : ℚ) / (nat.choose n (n - nat.succ k)) + ((∂decompose' n 𝒜 k).card : ℚ) / (nat.choose n (n - nat.succ k)),
+    have: ↑((𝒜#(n - (k + 1))).card + (∂decompose' 𝒜 k).card) / (nat.choose n (n - nat.succ k) : ℚ) = 
+          ((𝒜#(n - (k + 1))).card : ℚ) / (nat.choose n (n - nat.succ k)) + ((∂decompose' 𝒜 k).card : ℚ) / (nat.choose n (n - nat.succ k)),
       rw ← add_div,
       norm_cast,
     rw this,
     apply add_le_add_left,
     transitivity,
       exact ih (le_of_lt hk),
-    apply local_lym h (nat.le_sub_left_of_add_le hk) (nat.sub_le _ _) (decompose'_layer _ _ _)
+    apply local_lym (nat.le_sub_left_of_add_le hk) (nat.sub_le _ _) (decompose'_layer _ _)
   end
 
-  def decompose (n : ℕ) (𝒜 : finset (finset X)) (r : ℕ) : finset (finset X) :=
-  decompose' n 𝒜 (n-r)
+  def decompose (𝒜 : finset (finset X)) (r : ℕ) : finset (finset X) :=
+  decompose' 𝒜 (n-r)
 
-  def decompose_layer {n : ℕ} (𝒜 : finset (finset X)) (r : ℕ) (hr : r ≤ n) : is_layer (decompose n 𝒜 r) r :=
+  def decompose_layer (𝒜 : finset (finset X)) (r : ℕ) (hr : r ≤ n) : is_layer (decompose 𝒜 r) r :=
   begin
     rw decompose,
-    have := decompose'_layer _ 𝒜 (n-r),
+    have := decompose'_layer 𝒜 (n-r),
     rwa nat.sub_sub_self hr at this
   end
 
@@ -338,25 +337,24 @@ section lym
     simp [ih]
   end
 
-  lemma card_decompose_other (𝒜 : finset (finset X)) (r n : ℕ) (h : card X = n) (H : antichain 𝒜) : 
-    (range (n+1)).sum (λ r, ((𝒜#r).card : ℚ) / nat.choose n r) ≤ (decompose n 𝒜 0).card / nat.choose n 0 :=
+  lemma card_decompose_other (H : antichain 𝒜) : 
+    (range (n+1)).sum (λ r, ((𝒜#r).card : ℚ) / nat.choose n r) ≤ (decompose 𝒜 0).card / nat.choose n 0 :=
   begin
     rw [decompose, nat.sub_zero, ← nat.sub_self],
     by calc 
       (range (n + 1)).sum (λ r, ((𝒜#r).card : ℚ) / nat.choose n r) 
             = (range (n + 1)).sum (λ r, ((𝒜#(n-r)).card : ℚ) / nat.choose n (n-r)) 
                                               : by rw sum_flip (λ r, ((𝒜#r).card : ℚ) / nat.choose n r)
-        ... ≤ ((decompose' n 𝒜 n).card : ℚ) / nat.choose n (n-n) : card_decompose'_other (le_refl _) h H
+        ... ≤ ((decompose' 𝒜 n).card : ℚ) / nat.choose n (n-n) : card_decompose'_other (le_refl _) H
   end
 
-  lemma lubell_yamamoto_meshalkin (n : ℕ) (𝒜 : finset (finset (fin n))) (H : antichain 𝒜) :
-    (range (n+1)).sum (λ r, ((𝒜#r).card : ℚ) / nat.choose n r) ≤ 1 :=
+  lemma lubell_yamamoto_meshalkin (H : antichain 𝒜) : (range (n+1)).sum (λ r, ((𝒜#r).card : ℚ) / nat.choose n r) ≤ 1 :=
   begin
     transitivity,
-      apply card_decompose_other _ n _ (card_fin _) H,
+      apply card_decompose_other H,
     rw div_le_iff; norm_cast,
       rw decompose,
-      simpa using size_in_layer (decompose'_layer n 𝒜 n),
+      simpa using size_in_layer (decompose'_layer 𝒜 n),
     apply nat.choose_pos (zero_le n)
   end
 end lym
@@ -401,9 +399,9 @@ lemma sum_div {α : Type*} {s : finset α} {f : α → ℚ} {b : ℚ} : s.sum f 
 calc s.sum f / b = s.sum (λ x, f x * (1 / b)) : by rw [div_eq_mul_one_div, sum_mul]
      ...         = s.sum (λ x, f x / b) : by congr; ext; rw ← div_eq_mul_one_div
 
-lemma sperner {n : ℕ} (𝒜 : finset (finset (fin n))) (H : antichain 𝒜) : 𝒜.card ≤ nat.choose n (n / 2) := 
+lemma sperner (H : antichain 𝒜) : 𝒜.card ≤ nat.choose n (n / 2) := 
 begin
-  have q1 := lubell_yamamoto_meshalkin n 𝒜 H,
+  have q1 := lubell_yamamoto_meshalkin H,
   set f := (λ (r : ℕ), ((𝒜#r).card : ℚ) / nat.choose n r),
   set g := (λ (r : ℕ), ((𝒜#r).card : ℚ) / nat.choose n (n/2)),
   have q2 : sum (range (n + 1)) g ≤ sum (range (n + 1)) f,
@@ -441,226 +439,575 @@ begin
   exact ne_of_diff_slice Ha k ne rfl
 end
 
-variables {𝒜 : finset (finset (fin n))}
-
-def compress (A : finset (fin n)) (i j : fin n) : finset (fin n) := 
-if (j ∈ A ∧ i ∉ A)
-  then insert i (A.erase j)
-  else A
-
-local notation `C` := compress
-
-def compressed_set {A : finset (fin n)} {i j : fin n} : ¬ (j ∈ C A i j ∧ i ∉ C A i j) :=
-begin
-  intro,
-  rw compress at a,
-  split_ifs at a,
-    apply a.2,
-    apply mem_insert_self,
-  exact h a
-end
-
-lemma compress_idem (A : finset (fin n)) (i j : fin n) : C (C A i j) i j = C A i j :=
-begin
-  rw compress,
-  split_ifs,
-    exfalso,
-    apply compressed_set h,
-  refl
-end
-
-@[reducible] def compress_motion (𝒜 : finset (finset (fin n))) (i j : fin n) : finset (finset (fin n)) := 𝒜.filter (λ A, compress A i j ∈ 𝒜)
-@[reducible] def compress_remains (𝒜 : finset (finset (fin n))) (i j : fin n) := (𝒜.filter (λ A, compress A i j ∉ 𝒜)).image (λ A, compress A i j)
-
-def compress_family (𝒜 : finset (finset (fin n))) (i j : fin n) : finset (finset (fin n)) :=
-compress_remains 𝒜 i j ∪ compress_motion 𝒜 i j
-
-local notation `CC` := compress_family
-
-lemma mem_compress_motion {i j : fin n} (A : finset (fin n)) : A ∈ compress_motion 𝒜 i j ↔ A ∈ 𝒜 ∧ C A i j ∈ 𝒜 :=
-by rw mem_filter
-
-lemma mem_compress_remains {i j : fin n} (A : finset (fin n)) : A ∈ compress_remains 𝒜 i j ↔ A ∉ 𝒜 ∧ (∃ B ∈ 𝒜, C B i j = A) :=
-begin
-  simp [compress_remains], 
-  split; rintro ⟨p, q, r⟩,
-    exact ⟨r ▸ q.2, p, ⟨q.1, r⟩⟩,
-  exact ⟨q, ⟨r.1, r.2.symm ▸ p⟩, r.2⟩, 
-end
-
-lemma mem_compress {i j : fin n} {A : finset (fin n)} : A ∈ CC 𝒜 i j ↔ (A ∉ 𝒜 ∧ (∃ B ∈ 𝒜, C B i j = A)) ∨ (A ∈ 𝒜 ∧ C A i j ∈ 𝒜) :=
-by rw [compress_family, mem_union, mem_compress_motion, mem_compress_remains]
-
-lemma compress_disjoint (i j : fin n) : disjoint (compress_remains 𝒜 i j) (compress_motion 𝒜 i j) :=
-begin
-  rw disjoint_left,
-  intros A HA HB,
-  rw mem_compress_motion at HB,
-  rw mem_compress_remains at HA,
-  exact HA.1 HB.1
-end
-
-lemma inj_ish (X Y : finset (fin n)) (i j : fin n) (hX : j ∈ X ∧ i ∉ X) (hY : j ∈ Y ∧ i ∉ Y) 
-  (Z : insert i (erase X j) = insert i (erase Y j)) : X = Y := 
-begin
-  ext x, split,
-  all_goals { intro p, 
-              by_cases h₁: (x=j), {rw h₁, tauto}, 
-              have h₂: x ≠ i, {intro, rw a at p, tauto},
-              rw ext at Z,
-              replace Z := Z x,
-              rw [mem_insert, mem_erase, mem_insert, mem_erase] at Z,
-              tauto }
-end
-
-lemma compressed_size (i j : fin n) : (CC 𝒜 i j).card = 𝒜.card :=
-begin
-  rw [compress_family, card_disjoint_union (compress_disjoint _ _), card_image_of_inj_on],
-    rw [← card_disjoint_union, union_comm, filter_union_filter_neg_eq],
-    rw [disjoint_iff_inter_eq_empty, inter_comm],
-    apply filter_inter_filter_neg_eq,
-  intros X HX Y HY Z,
-  rw mem_filter at HX HY,
-  rw compress at HX Z,
-  split_ifs at HX Z,
-    rw compress at HY Z,
-    split_ifs at HY Z,
-      refine inj_ish X Y i j h h_1 Z,
-    tauto,
-  tauto
-end
-
-lemma insert_erase_comm {A : finset (fin n)} {i j : fin n} (h : i ≠ j) : insert i (erase A j) = erase (insert i A) j :=
-begin
-  simp only [ext, mem_insert, mem_erase],
-  intro x,
-  split; intro p,
-    cases p, split, rw p, 
-  all_goals {tauto},
-end
-
-lemma compress_moved {A : finset (fin n)} {i j : fin n} (h₁ : A ∈ CC 𝒜 i j) (h₂ : A ∉ 𝒜) : i ∈ A ∧ j ∉ A ∧ erase (insert j A) i ∈ 𝒜 :=
-begin
-  rw mem_compress at h₁,
-  rcases h₁ with ⟨_, B, H, HB⟩ | _,
-    rw compress at HB,
-    split_ifs at HB,
-      rw ← HB,
-      refine ⟨mem_insert_self _ _, _, _⟩,
-        rw mem_insert,
-        intro,
-        cases a,
-          safe,
-        apply not_mem_erase j B a,
-      have: erase (insert j (insert i (erase B j))) i = B,
-        rw [insert_erase_comm, insert_erase (mem_insert_of_mem h.1), erase_insert h.2], 
-        safe, 
-      rwa this,
-    rw HB at H, tauto,
-  tauto
-end
-
-lemma compress_held {A : finset (fin n)} {i j : fin n} (h₁ : j ∈ A) (h₂ : A ∈ CC 𝒜 i j) : A ∈ 𝒜 :=
-begin
-  rw mem_compress at h₂,
-  rcases h₂ with ⟨_, B, H, HB⟩ | _,
-    rw ← HB at h₁,
-    rw compress at HB h₁,
-    split_ifs at HB h₁,
-      rw mem_insert at h₁,
-      cases h₁,
-        safe,
-      exfalso, apply not_mem_erase _ _ h₁,
-    rwa ← HB,
-  tauto
-end
-
-lemma compress_both {A : finset (fin n)} {i j : fin n} (h₁ : A ∈ CC 𝒜 i j) (h₂ : j ∈ A) (h₃ : i ∉ A) : erase (insert i A) j ∈ 𝒜 :=
-begin
-  have: A ∈ 𝒜, apply compress_held ‹_› ‹_›,
-  rw mem_compress at h₁,
-  replace h₁ : C A i j ∈ 𝒜, tauto,
-  rw compress at h₁,
-  have: j ∈ A ∧ i ∉ A := ⟨h₂, h₃⟩,
-  split_ifs at h₁,
-  rwa ← insert_erase_comm,
-  intro, rw a at *, tauto,
-end
-
-lemma sdiff_union_inter (A B : finset X) : (A \ B) ∪ (A ∩ B) = A :=
+lemma sdiff_union_inter {α : Type*} [decidable_eq α] (A B : finset α) : (A \ B) ∪ (A ∩ B) = A :=
 by simp only [ext, mem_union, mem_sdiff, mem_inter]; tauto
 
-lemma sdiff_inter_inter (A B : finset X) : (A \ B) ∩ (A ∩ B) = ∅ :=
+lemma sdiff_inter_inter {α : Type*} [decidable_eq α] (A B : finset α) : (A \ B) ∩ (A ∩ B) = ∅ :=
 by simp only [ext, mem_inter, mem_sdiff, not_mem_empty]; tauto
 
-lemma compression_reduces_shadow (i j : fin n) : (∂ (CC 𝒜 i j)).card ≤ (∂𝒜).card := 
-begin
-  set 𝒜' := CC 𝒜 i j,
-  suffices: (∂𝒜' \ ∂𝒜).card ≤ (∂𝒜 \ ∂𝒜').card,
-    suffices: card (∂𝒜' \ ∂𝒜 ∪ ∂𝒜' ∩ ∂𝒜) ≤ card (∂𝒜 \ ∂𝒜' ∪ ∂𝒜 ∩ ∂𝒜'),
-      rwa [sdiff_union_inter, sdiff_union_inter] at this,
-    rw [card_disjoint_union, card_disjoint_union, inter_comm],
-    apply add_le_add_right ‹_›,
-    any_goals { rw disjoint_iff_inter_eq_empty,
-                apply sdiff_inter_inter },
-
-  have q₁: ∀ B ∈ ∂𝒜' \ ∂𝒜, i ∈ B ∧ j ∉ B ∧ erase (insert j B) i ∈ ∂𝒜 \ ∂𝒜',
-    intros B HB,
-    obtain ⟨k, k'⟩: B ∈ ∂𝒜' ∧ B ∉ ∂𝒜 := mem_sdiff.1 HB,
-    have m: ∀ y ∉ B, insert y B ∉ 𝒜,
-      intros y _ _,
-      apply k',
-      rw mem_shadow',
-      exact ⟨y, H, a⟩,
-    rcases mem_shadow'.1 k with ⟨x, _, _⟩,
-    have q := compress_moved ‹insert x B ∈ 𝒜'› (m _ ‹x ∉ B›),
-    rw insert.comm at q,
-    have: j ∉ B := q.2.1 ∘ mem_insert_of_mem,
-    have: i ≠ j, safe,
-    have: x ≠ i, intro a, rw a at *, rw [erase_insert] at q, 
-      exact m _ ‹j ∉ B› q.2.2,
-      rw mem_insert, tauto,
-    have: x ≠ j, intro a, rw a at q, exact q.2.1 (mem_insert_self _ _), 
-    have: i ∈ B := mem_of_mem_insert_of_ne q.1 ‹x ≠ i›.symm,
-    refine ⟨‹_›, ‹_›, _⟩,
-    rw mem_sdiff,
-    split,
-      rw mem_shadow',
-      rw ← insert_erase_comm ‹x ≠ i› at q,
-      refine ⟨x, _, q.2.2⟩, 
-      intro a, 
-      exact ‹x ∉ B› (mem_of_mem_insert_of_ne (mem_of_mem_erase a) ‹x ≠ j›),
-
-    intro a, rw mem_shadow' at a, 
-    rcases a with ⟨y, yH, H⟩,
-    have: y ≠ i, intro b, rw [b, insert_erase (mem_insert_of_mem ‹i ∈ B›)] at H, 
-                 exact m _ ‹j ∉ B› (compress_held (mem_insert_self _ _) H), 
-    have: y ≠ j, rw [mem_erase, mem_insert] at yH, tauto,
-    have: y ∉ B, rw [mem_erase, mem_insert] at yH, tauto,
-    have: j ∈ insert y (erase (insert j B) i), finish,
-    have: i ∉ insert y (erase (insert j B) i), finish,
-    have := compress_both H ‹_› ‹_›,
-    rw [insert.comm, ← insert_erase_comm ‹y ≠ j›, insert_erase (mem_insert_of_mem ‹i ∈ B›), erase_insert ‹j ∉ B›] at this,
-    exact m _ ‹y ∉ B› ‹insert y B ∈ 𝒜›,
+namespace ij
+section 
+  variables (i j : X)
   
-  set f := (λ (B : finset (fin n)), erase (insert j B) i),
-  apply card_le_card_of_inj_on f,
-    intros _ HB,
-    exact (q₁ _ HB).2.2,
- 
-  intros B₁ HB₁ B₂ HB₂ f₁,
-  have := q₁ B₁ HB₁,
-  have := q₁ B₂ HB₂,
-  rw ext at f₁,
-  ext,
-  split,
-  all_goals { intro,
-              have p := f₁ a,
-              simp only [mem_erase, mem_insert] at p,
-              by_cases (a = i),
-                rw h, tauto,
-              rw [and_iff_right h, and_iff_right h] at p,
-              have z: j ∉ B₁ ∧ j ∉ B₂, tauto,
-              have: a ≠ j, safe,
-              tauto }
+  def compress (i j : X) (A : finset X) : finset X := 
+  if (j ∈ A ∧ i ∉ A)
+    then insert i (A.erase j)
+    else A
+
+  local notation `C` := compress i j
+
+  def compressed_set {A : finset X} : ¬ (j ∈ C A ∧ i ∉ C A) :=
+  begin
+    intro,
+    rw compress at a,
+    split_ifs at a,
+      apply a.2,
+      apply mem_insert_self,
+    exact h a
+  end
+
+  lemma compress_idem (A : finset X) : C (C A) = C A :=
+  begin
+    rw compress,
+    split_ifs,
+      exfalso,
+      apply compressed_set _ _ h,
+    refl
+  end
+
+  @[reducible] def compress_motion (𝒜 : finset (finset X)) : finset (finset X) := 𝒜.filter (λ A, C A ∈ 𝒜)
+  @[reducible] def compress_remains (𝒜 : finset (finset X)) : finset (finset X) := (𝒜.filter (λ A, C A ∉ 𝒜)).image (λ A, C A)
+
+  def compress_family (i j : X) (𝒜 : finset (finset X)) : finset (finset X) :=
+  @compress_remains _ i j 𝒜 ∪ @compress_motion _ i j 𝒜
+
+  local notation `CC` := compress_family i j
+
+  lemma mem_compress_motion (A : finset X) : A ∈ compress_motion i j 𝒜 ↔ A ∈ 𝒜 ∧ C A ∈ 𝒜 :=
+  by rw mem_filter
+
+  lemma mem_compress_remains (A : finset X) : A ∈ compress_remains i j 𝒜 ↔ A ∉ 𝒜 ∧ (∃ B ∈ 𝒜, C B = A) :=
+  begin
+    simp [compress_remains], 
+    split; rintro ⟨p, q, r⟩,
+      exact ⟨r ▸ q.2, p, ⟨q.1, r⟩⟩,
+    exact ⟨q, ⟨r.1, r.2.symm ▸ p⟩, r.2⟩, 
+  end
+
+  lemma mem_compress {A : finset X} : A ∈ CC 𝒜 ↔ (A ∉ 𝒜 ∧ (∃ B ∈ 𝒜, C B = A)) ∨ (A ∈ 𝒜 ∧ C A ∈ 𝒜) :=
+  by rw [compress_family, mem_union, mem_compress_motion, mem_compress_remains]
+
+  lemma compress_disjoint (i j : fin n) : disjoint (compress_remains i j 𝒜) (compress_motion i j 𝒜) :=
+  begin
+    rw disjoint_left,
+    intros A HA HB,
+    rw mem_compress_motion at HB,
+    rw mem_compress_remains at HA,
+    exact HA.1 HB.1
+  end
+
+  lemma inj_ish {i j : X} (A B : finset X) (hA : j ∈ A ∧ i ∉ A) (hY : j ∈ B ∧ i ∉ B) 
+    (Z : insert i (erase A j) = insert i (erase B j)) : A = B := 
+  begin
+    ext x, split,
+    all_goals { intro p, 
+                by_cases h₁: (x=j), {rw h₁, tauto}, 
+                have h₂: x ≠ i, {intro, rw a at p, tauto},
+                rw ext at Z,
+                replace Z := Z x,
+                simp only [mem_insert, mem_erase] at Z,
+                tauto }
+  end
+
+  lemma compressed_size : (CC 𝒜).card = 𝒜.card :=
+  begin
+    rw [compress_family, card_disjoint_union (compress_disjoint _ _), card_image_of_inj_on],
+      rw [← card_disjoint_union, union_comm, filter_union_filter_neg_eq],
+      rw [disjoint_iff_inter_eq_empty, inter_comm],
+      apply filter_inter_filter_neg_eq,
+    intros A HX Y HY Z,
+    rw mem_filter at HX HY,
+    rw compress at HX Z,
+    split_ifs at HX Z,
+      rw compress at HY Z,
+      split_ifs at HY Z,
+        refine inj_ish A Y h h_1 Z,
+      tauto,
+    tauto
+  end
+
+  lemma insert_erase_comm {i j : fin n} {A : finset X} (h : i ≠ j) : insert i (erase A j) = erase (insert i A) j :=
+  begin
+    simp only [ext, mem_insert, mem_erase],
+    intro x,
+    split; intro p,
+      cases p, split, rw p, 
+    all_goals {tauto},
+  end
+
+  lemma compress_moved {i j : X} {A : finset X} (h₁ : A ∈ compress_family i j 𝒜) (h₂ : A ∉ 𝒜) : i ∈ A ∧ j ∉ A ∧ erase (insert j A) i ∈ 𝒜 :=
+  begin
+    rw mem_compress at h₁,
+    rcases h₁ with ⟨_, B, H, HB⟩ | _,
+      rw compress at HB,
+      split_ifs at HB,
+        rw ← HB,
+        refine ⟨mem_insert_self _ _, _, _⟩,
+          rw mem_insert,
+          intro,
+          cases a,
+            safe,
+          apply not_mem_erase j B a,
+        have: erase (insert j (insert i (erase B j))) i = B,
+          rw [insert_erase_comm, insert_erase (mem_insert_of_mem h.1), erase_insert h.2], 
+          safe, 
+        rwa this,
+      rw HB at H, tauto,
+    tauto
+  end
+
+  lemma compress_held {i j : X} {A : finset X} (h₁ : j ∈ A) (h₂ : A ∈ compress_family i j 𝒜) : A ∈ 𝒜 :=
+  begin
+    rw mem_compress at h₂,
+    rcases h₂ with ⟨_, B, H, HB⟩ | _,
+      rw ← HB at h₁,
+      rw compress at HB h₁,
+      split_ifs at HB h₁,
+        rw mem_insert at h₁,
+        cases h₁,
+          safe,
+        exfalso, apply not_mem_erase _ _ h₁,
+      rwa ← HB,
+    tauto
+  end
+
+  lemma compress_both {i j : X} {A : finset X} (h₁ : A ∈ compress_family i j 𝒜) (h₂ : j ∈ A) (h₃ : i ∉ A) : erase (insert i A) j ∈ 𝒜 :=
+  begin
+    have: A ∈ 𝒜, apply compress_held ‹_› ‹_›,
+    rw mem_compress at h₁,
+    replace h₁ : C A ∈ 𝒜, tauto,
+    rw compress at h₁,
+    have: j ∈ A ∧ i ∉ A := ⟨h₂, h₃⟩,
+    split_ifs at h₁,
+    rwa ← insert_erase_comm,
+    intro, rw a at *, tauto,
+  end
+
+  lemma compression_reduces_shadow : (∂ CC 𝒜).card ≤ (∂𝒜).card := 
+  begin
+    set 𝒜' := CC 𝒜,
+    suffices: (∂𝒜' \ ∂𝒜).card ≤ (∂𝒜 \ ∂𝒜').card,
+      suffices z: card (∂𝒜' \ ∂𝒜 ∪ ∂𝒜' ∩ ∂𝒜) ≤ card (∂𝒜 \ ∂𝒜' ∪ ∂𝒜 ∩ ∂𝒜'),
+        rwa [sdiff_union_inter, sdiff_union_inter] at z,
+      rw [card_disjoint_union, card_disjoint_union, inter_comm],
+      apply add_le_add_right ‹_›,
+      any_goals { rw disjoint_iff_inter_eq_empty,
+                  apply sdiff_inter_inter },
+
+    have q₁: ∀ B ∈ ∂𝒜' \ ∂𝒜, i ∈ B ∧ j ∉ B ∧ erase (insert j B) i ∈ ∂𝒜 \ ∂𝒜',
+      intros B HB,
+      obtain ⟨k, k'⟩: B ∈ ∂𝒜' ∧ B ∉ ∂𝒜 := mem_sdiff.1 HB,
+      have m: ∀ y ∉ B, insert y B ∉ 𝒜,
+        intros y _ _,
+        apply k',
+        rw mem_shadow',
+        exact ⟨y, H, a⟩,
+      rcases mem_shadow'.1 k with ⟨x, _, _⟩,
+      have q := compress_moved ‹insert x B ∈ 𝒜'› (m _ ‹x ∉ B›),
+      rw insert.comm at q,
+      have: j ∉ B := q.2.1 ∘ mem_insert_of_mem,
+      have: i ≠ j, safe,
+      have: x ≠ i, intro a, rw a at *, rw [erase_insert] at q, 
+        exact m _ ‹j ∉ B› q.2.2,
+        rw mem_insert, tauto,
+      have: x ≠ j, intro a, rw a at q, exact q.2.1 (mem_insert_self _ _), 
+      have: i ∈ B := mem_of_mem_insert_of_ne q.1 ‹x ≠ i›.symm,
+      refine ⟨‹_›, ‹_›, _⟩,
+      rw mem_sdiff,
+      split,
+        rw mem_shadow',
+        rw ← insert_erase_comm ‹x ≠ i› at q,
+        refine ⟨x, _, q.2.2⟩, 
+        intro a, 
+        exact ‹x ∉ B› (mem_of_mem_insert_of_ne (mem_of_mem_erase a) ‹x ≠ j›),
+
+      intro a, rw mem_shadow' at a, 
+      rcases a with ⟨y, yH, H⟩,
+      have: y ≠ i, intro b, rw [b, insert_erase (mem_insert_of_mem ‹i ∈ B›)] at H, 
+                  exact m _ ‹j ∉ B› (compress_held (mem_insert_self _ _) H), 
+      have: y ≠ j, rw [mem_erase, mem_insert] at yH, tauto,
+      have: y ∉ B, rw [mem_erase, mem_insert] at yH, tauto,
+      have: j ∈ insert y (erase (insert j B) i), finish,
+      have: i ∉ insert y (erase (insert j B) i), finish,
+      have := compress_both H ‹_› ‹_›,
+      rw [insert.comm, ← insert_erase_comm ‹y ≠ j›, insert_erase (mem_insert_of_mem ‹i ∈ B›), erase_insert ‹j ∉ B›] at this,
+      exact m _ ‹y ∉ B› ‹insert y B ∈ 𝒜›,
+    
+    set f := (λ (B : finset X), erase (insert j B) i),
+    apply card_le_card_of_inj_on f,
+      intros _ HB,
+      exact (q₁ _ HB).2.2,
+  
+    intros B₁ HB₁ B₂ HB₂ f₁,
+    have := q₁ B₁ HB₁,
+    have := q₁ B₂ HB₂,
+    rw ext at f₁,
+    ext,
+    split,
+    all_goals { intro,
+                have p := f₁ a,
+                simp only [mem_erase, mem_insert] at p,
+                by_cases (a = i),
+                  rw h, tauto,
+                rw [and_iff_right h, and_iff_right h] at p,
+                have z: j ∉ B₁ ∧ j ∉ B₂, tauto,
+                have: a ≠ j, safe,
+                tauto }
+  end
 end
+end ij
+
+@[simp] lemma sdiff_empty {α : Type*} [decidable_eq α] (s : finset α) : s \ ∅ = s := empty_union s
+@[simp] lemma sdiff_idem {α : Type*} [decidable_eq α] (s t : finset α) : s \ t \ t = s \ t := by simp only [ext, mem_sdiff]; tauto
+lemma union_sdiff {α : Type*} [decidable_eq α] (s₁ s₂ t : finset α) : (s₁ ∪ s₂) \ t = s₁ \ t ∪ s₂ \ t := by simp only [ext, mem_sdiff, mem_union]; tauto
+lemma inter_union_self {α : Type*} [decidable_eq α] (s t : finset α) : s ∩ (t ∪ s) = s := by simp only [ext, mem_inter, mem_union]; tauto
+lemma union_sdiff_self {α : Type*} [decidable_eq α] (s t : finset α) : (s ∪ t) \ t = s \ t := by simp only [ext, mem_union, mem_sdiff]; tauto
+lemma sdiff_singleton_eq_erase {α : Type*} [decidable_eq α] (a : α) (s : finset α) : s \ finset.singleton a = erase s a := begin ext, rw [mem_erase, mem_sdiff, mem_singleton], tauto end
+lemma union_singleton_eq_insert {α : Type*} [decidable_eq α] (a : α) (s : finset α) : finset.singleton a ∪ s = insert a s := begin ext, rw [mem_insert, mem_union, mem_singleton] end
+lemma sdiff_union {α : Type*} [decidable_eq α] (s t₁ t₂ : finset α) : s \ (t₁ ∪ t₂) = (s \ t₁) ∩ (s \ t₂) := by simp only [ext, mem_union, mem_sdiff, mem_inter]; tauto
+lemma not_sure {α : Type*} [decidable_eq α] (s t : finset α) (h : t ⊆ s) : s ∪ t = s := by simp only [ext, mem_union]; tauto
+
+namespace UV
+section 
+  variables (U V : finset X)
+  
+  -- We'll only use this when |U| = |V| and U ∩ V = ∅
+  def compress (U V : finset X) (A : finset X) :=
+  if U ∩ A = ∅ ∧ V ⊆ A
+    then (A ∪ U) \ V
+    else A
+
+  local notation `C` := compress U V
+
+  lemma compress_idem (A : finset X) : C (C A) = C A :=
+  begin
+    rw [compress, compress],
+    split_ifs,
+        suffices: U = ∅,
+          rw [this, union_empty, union_empty, sdiff_idem],
+        have: U ∩ V = ∅,
+          have: U ∩ V ⊆ U ∩ A := inter_subset_inter_left h.2,
+          rw ← subset_empty,
+          rwa h.1 at this,
+        have: U \ V = U,
+          have := sdiff_union_inter U V,
+          rw [‹U ∩ V = ∅›, union_empty] at this,
+          assumption,
+        rw [union_sdiff, ‹U \ V = U›, inter_union_self] at h_1,
+        tauto,
+      refl,
+    refl,
+  end
+
+  @[reducible] def compress_motion (𝒜 : finset (finset X)) : finset (finset X) := 𝒜.filter (λ A, C A ∈ 𝒜)
+  @[reducible] def compress_remains (𝒜 : finset (finset X)) : finset (finset X) := (𝒜.filter (λ A, C A ∉ 𝒜)).image (λ A, C A)
+
+  def compress_family (U V : finset X) (𝒜 : finset (finset X)) : finset (finset X) :=
+  compress_remains U V 𝒜 ∪ compress_motion U V 𝒜
+
+  local notation `CC` := compress_family U V
+
+  lemma mem_compress_motion (A : finset X) : A ∈ compress_motion U V 𝒜 ↔ A ∈ 𝒜 ∧ C A ∈ 𝒜 :=
+  by rw mem_filter
+
+  lemma mem_compress_remains (A : finset X) : A ∈ compress_remains U V 𝒜 ↔ A ∉ 𝒜 ∧ (∃ B ∈ 𝒜, C B = A) :=
+  begin
+    simp [compress_remains], 
+    split; rintro ⟨p, q, r⟩,
+      exact ⟨r ▸ q.2, p, ⟨q.1, r⟩⟩,
+    exact ⟨q, ⟨r.1, r.2.symm ▸ p⟩, r.2⟩, 
+  end
+
+  lemma mem_compress {A : finset X} : A ∈ CC 𝒜 ↔ (A ∉ 𝒜 ∧ (∃ B ∈ 𝒜, C B = A)) ∨ (A ∈ 𝒜 ∧ C A ∈ 𝒜) :=
+  by rw [compress_family, mem_union, mem_compress_motion, mem_compress_remains]
+
+  lemma compress_disjoint (U V : finset X) : disjoint (compress_remains U V 𝒜) (compress_motion U V 𝒜) :=
+  begin
+    rw disjoint_left,
+    intros A HA HB,
+    rw mem_compress_motion at HB,
+    rw mem_compress_remains at HA,
+    exact HA.1 HB.1
+  end
+
+  lemma inj_ish {U V : finset X} (A B : finset X) (hA : U ∩ A = ∅ ∧ V ⊆ A) (hB : U ∩ B = ∅ ∧ V ⊆ B)
+    (Z : (A ∪ U) \ V = (B ∪ U) \ V) : A = B :=
+  begin
+    ext x, split,
+    all_goals {
+      intro p,
+      by_cases h₁: (x ∈ V), 
+        { exact hB.2 h₁ <|> exact hA.2 h₁ },
+      have := mem_sdiff.2 ⟨mem_union_left U ‹_›, h₁⟩,
+      rw Z at this <|> rw ← Z at this,
+      rw [mem_sdiff, mem_union] at this,
+      suffices: x ∉ U, tauto,
+      intro a, have := mem_inter_of_mem a p,
+      rw eq_empty_iff_forall_not_mem at hA hB,
+      tauto
+    }
+  end
+
+  lemma compressed_size : (CC 𝒜).card = 𝒜.card :=
+  begin
+    rw [compress_family, card_disjoint_union (compress_disjoint _ _), card_image_of_inj_on],
+      rw [← card_disjoint_union, union_comm, filter_union_filter_neg_eq],
+      rw [disjoint_iff_inter_eq_empty, inter_comm],
+      apply filter_inter_filter_neg_eq,
+    intros A HX Y HY Z,
+    rw mem_filter at HX HY,
+    rw compress at HX Z,
+    split_ifs at HX Z,
+      rw compress at HY Z,
+      split_ifs at HY Z,
+        refine inj_ish A Y h h_1 Z,
+      tauto,
+    tauto
+  end
+
+  lemma compress_held {U V : finset X} {A : finset X} (h₁ : A ∈ compress_family U V 𝒜) (h₂ : V ⊆ A) (h₃ : U.card = V.card) : A ∈ 𝒜 :=
+  begin
+    rw mem_compress at h₁,
+    rcases h₁ with ⟨_, B, H, HB⟩ | _,
+    rw compress at HB,
+    split_ifs at HB,
+    have: V = ∅,
+      apply eq_empty_of_forall_not_mem,
+      intros x xV, replace h₂ := h₂ xV, 
+      rw [← HB, mem_sdiff] at h₂,
+      tauto,
+    rw this at *, rw sdiff_empty at HB,
+    have: U = ∅,
+      simp at h₃, assumption,
+    rw this at *, rw union_empty at HB, rwa ← HB, 
+    rwa ← HB,
+    tauto,
+  end
+
+  lemma compress_moved {U V : finset X} {A : finset X} (h₁ : A ∈ compress_family U V 𝒜) (h₂ : A ∉ 𝒜) : U ⊆ A ∧ V ∩ A = ∅ ∧ (A ∪ V) \ U ∈ 𝒜 :=
+  begin
+    rw mem_compress at h₁,
+    rcases h₁ with ⟨_, B, H, HB⟩ | _,
+    { rw compress at HB,
+      split_ifs at HB, { 
+        rw ← HB at *,
+        refine ⟨λ t a, _, inter_sdiff_self _ _, _⟩,
+          rw mem_sdiff,
+          refine ⟨mem_union_right _ a, λ z, eq_empty_iff_forall_not_mem.1 h.1 t (mem_inter_of_mem a (h.2 z))⟩,
+        rw sdiff_union_of_subset,
+        rw [← sdiff_union_inter B U, inter_comm, h.1, union_empty] at H,
+        rwa union_sdiff_self,
+        exact (λ _, mem_union_left _ ∘ mem_of_subset h.2)
+      },
+      { rw HB at *, tauto } },
+    tauto
+  end
+
+  lemma uncompressed_was_already_there {U V : finset X} {A : finset X} (h₁ : A ∈ compress_family U V 𝒜) (h₂ : V ⊆ A) (h₃ : U ∩ A = ∅) : (A ∪ U) \ V ∈ 𝒜 :=
+  begin
+    rw mem_compress at h₁,
+    rcases h₁ with ⟨_, B, B_in_A, cB_eq_A⟩ | ⟨_, cA_in_A⟩,
+    { 
+      by_cases h: (U = ∅ ∧ V = ∅),
+        rw compress at cB_eq_A,
+        rw [h.1, h.2] at *,
+        simp at cB_eq_A ⊢,
+        rwa ← ‹B = A›,
+      have: U ∩ A = ∅ ∧ V ⊆ A := ⟨h₃, h₂⟩,
+      have: compress U V A = (A ∪ U) \ V,
+        rw compress, split_ifs, refl,
+      rw ← this,
+      have: (A ∪ U) \ V ≠ A,
+        cases not_and_distrib.mp h with h h;
+        rcases exists_mem_of_ne_empty h,
+          intro,
+          rw [← disjoint_iff_inter_eq_empty, disjoint_left] at h₃,
+          apply h₃ h_1, 
+          rw [← a, mem_sdiff, mem_union],
+          split, right, assumption,
+            intro,
+            have: w ∈ U ∩ A := mem_inter_of_mem ‹w ∈ U› (h₂ a_1),
+            rw ‹U ∩ A = ∅ ∧ V ⊆ A›.1 at this,
+            refine not_mem_empty _ ‹_›,
+        have: w ∈ A := h₂ h_1,
+        intro,
+        rw [← a, mem_sdiff] at this,
+        tauto,
+      exfalso,
+      apply this,
+      rw [← ‹compress U V A = (A ∪ U) \ V›, ← cB_eq_A, compress_idem]
+    },
+    { rw compress at cA_in_A,
+      have: U ∩ A = ∅ ∧ V ⊆ A := ⟨h₃, h₂⟩,
+      split_ifs at cA_in_A,
+      assumption
+    }
+  end
+
+  def is_compressed (U V : finset X) (𝒜 : finset (finset X)) : Prop := compress_family U V 𝒜 = 𝒜
+
+  lemma compression_reduces_shadow (h₁ : ∀ x ∈ U, ∃ y ∈ V, is_compressed (erase U x) (erase V y) 𝒜) (h₂ : U.card = V.card) : 
+    (∂ CC 𝒜).card ≤ (∂𝒜).card := 
+  begin
+    set 𝒜' := CC 𝒜,
+    suffices: (∂𝒜' \ ∂𝒜).card ≤ (∂𝒜 \ ∂𝒜').card,
+      suffices z: card (∂𝒜' \ ∂𝒜 ∪ ∂𝒜' ∩ ∂𝒜) ≤ card (∂𝒜 \ ∂𝒜' ∪ ∂𝒜 ∩ ∂𝒜'),
+        rwa [sdiff_union_inter, sdiff_union_inter] at z,
+      rw [card_disjoint_union, card_disjoint_union, inter_comm],
+      apply add_le_add_right ‹_›,
+      any_goals { rw disjoint_iff_inter_eq_empty,
+                  apply sdiff_inter_inter },
+    
+    have q₁: ∀ B ∈ ∂𝒜' \ ∂𝒜, U ⊆ B ∧ V ∩ B = ∅ ∧ (B ∪ V) \ U ∈ ∂𝒜 \ ∂𝒜',
+      intros B HB,
+      obtain ⟨k, k'⟩: B ∈ ∂𝒜' ∧ B ∉ ∂𝒜 := mem_sdiff.1 HB,
+      have m: ∀ y ∉ B, insert y B ∉ 𝒜,
+        intros y _ _,
+        apply k',
+        rw mem_shadow',
+        exact ⟨y, H, a⟩,
+      rcases mem_shadow'.1 k with ⟨x, _, _⟩,
+      have q := compress_moved ‹insert x B ∈ 𝒜'› (m _ ‹x ∉ B›),
+      have: V ∩ B = ∅,
+        rw [← subset_empty, ← q.2.1], apply inter_subset_inter_left,
+        apply subset_insert,
+      have: V ∩ U = ∅,
+        rw ← disjoint_iff_inter_eq_empty,
+        apply disjoint_of_subset_right q.1,
+        rw disjoint_iff_inter_eq_empty,
+        exact q.2.1,
+      have: V \ U = V, 
+        conv {to_rhs, rw ← sdiff_union_inter V U},
+        rw [‹V ∩ U = ∅›, union_empty],
+      have: x ∉ U,
+        intro, 
+        rcases h₁ x ‹x ∈ U› with ⟨y, Hy, xy_comp⟩,
+        apply m y (disjoint_left.1 (disjoint_iff_inter_eq_empty.2 ‹V ∩ B = ∅›) Hy),
+        rw is_compressed at xy_comp,
+        have: (insert x B ∪ V) \ U ∈ compress_family (erase U x) (erase V y) 𝒜, rw xy_comp, exact q.2.2,
+        have: ((insert x B ∪ V) \ U ∪ erase U x) \ erase V y ∈ 𝒜,
+          apply uncompressed_was_already_there this,
+            intros t tH, rw [mem_sdiff, mem_union], replace tH := mem_of_mem_erase tH,
+            split, right, assumption,
+            intro, replace a_1 := q.1 a_1,
+            rw [← disjoint_iff_inter_eq_empty, disjoint_left] at q,
+            apply q.2.1 tH a_1,
+        rw ← disjoint_iff_inter_eq_empty,
+        apply disjoint_of_subset_left (erase_subset _ _),
+        apply disjoint_sdiff,
+        suffices: ((insert x B ∪ V) \ U ∪ erase U x) \ erase V y = insert y B,
+          rwa ← this,
+        by calc (((insert x B ∪ V) \ U) ∪ erase U x) \ erase V y 
+                    = (((insert x B ∪ V) \ (finset.singleton x ∪ erase U x)) ∪ erase U x) \ erase V y : begin rw [union_singleton_eq_insert, insert_erase a] end
+                ... = ((((insert x B ∪ V) \ (finset.singleton x)) ∩ ((insert x B ∪ V) \ (erase U x))) ∪ erase U x) \ erase V y : begin rw [sdiff_union] end
+                ... = (((((insert x B ∪ V) \ (finset.singleton x)) ∪ erase U x) ∩ (((insert x B ∪ V) \ (erase U x)) ∪ erase U x))) \ erase V y : begin rw union_distrib_right end
+                ... = (((((insert x B ∪ V) \ (finset.singleton x)) ∪ erase U x) ∩ (((insert x B ∪ V))))) \ erase V y : begin rw sdiff_union_of_subset, refine trans (erase_subset _ _) (trans q.1 (subset_union_left _ _)) end
+                ... = (((((insert x (B ∪ V)) \ (finset.singleton x)) ∪ erase U x) ∩ (((insert x B ∪ V))))) \ erase V y : begin rw insert_union end
+                ... = ((((erase (insert x (B ∪ V)) x) ∪ erase U x) ∩ (((insert x B ∪ V))))) \ erase V y : begin rw sdiff_singleton_eq_erase end
+                ... = ((B ∪ V ∪ erase U x) ∩ (insert x B ∪ V)) \ erase V y : begin rw erase_insert, rw mem_union, exact (λ a_1, disjoint_left.1 (disjoint_iff_inter_eq_empty.2 ‹V ∩ U = ∅›) (or.resolve_left a_1 ‹x ∉ B›) ‹x ∈ U›) end
+                ... = ((B ∪ erase U x ∪ V) ∩ (insert x B ∪ V)) \ erase V y : begin rw union_right_comm end
+                ... = ((B ∪ V) ∩ (insert x B ∪ V)) \ erase V y : begin congr, rw not_sure, rw ← subset_insert_iff, exact q.1 end
+                ... = ((B ∩ insert x B) ∪ V) \ erase V y : by rw union_distrib_right
+                ... = (B ∪ V) \ erase V y : begin rw inter_insert_of_not_mem h_w, rw inter_self end
+                ... = (B ∪ (finset.singleton y ∪ erase V y)) \ erase V y : begin congr, rw union_singleton_eq_insert, rw insert_erase Hy end
+                ... = (B ∪ finset.singleton y ∪ erase V y) \ erase V y : begin rw union_assoc end
+                ... = B ∪ finset.singleton y : begin rw union_sdiff_self, conv {to_rhs, rw ← sdiff_union_inter (B ∪ finset.singleton y) (erase V y)}, suffices: disjoint (B ∪ finset.singleton y) (erase V y), rw disjoint_iff_inter_eq_empty at this, rw this, rw union_empty, rw union_comm, rw union_singleton_eq_insert, rw disjoint_insert_left, split, apply not_mem_erase, apply disjoint_of_subset_right (erase_subset _ _), rw disjoint_iff_inter_eq_empty, rwa inter_comm end
+                ... = insert y B : begin rw [union_comm, union_singleton_eq_insert] end,
+      have: U ⊆ B := λ _ _, mem_of_mem_insert_of_ne (q.1 ‹_ ∈ U›) (λ _, by safe),
+      refine ⟨‹_›, ‹_›, _⟩,
+      rw mem_sdiff,
+      have: x ∉ V := λ a, ne_empty_of_mem (mem_inter_of_mem a (mem_insert_self _ _)) q.2.1,
+      split,
+        rw mem_shadow',
+        refine ⟨x, _, _⟩,
+        { simp [mem_sdiff, mem_union], safe },
+        have: insert x ((B ∪ V) \ U) = (insert x B ∪ V) \ U,
+          simp [ext, mem_sdiff, mem_union, mem_insert], 
+          intro a,
+          split; intro p,
+            cases p,
+              rw p at *, tauto,
+            tauto,
+          tauto,
+        rw this, tauto,
+      rw mem_shadow',
+      rintro ⟨w, _, _⟩,
+      by_cases (w ∈ U),
+        rcases h₁ w ‹w ∈ U› with ⟨z, Hz, xy_comp⟩,
+        apply m z (disjoint_left.1 (disjoint_iff_inter_eq_empty.2 ‹V ∩ B = ∅›) Hz),
+        have: insert w ((B ∪ V) \ U) ∈ 𝒜, {
+          apply compress_held a_h_h _ h₂, 
+          apply subset.trans _ (subset_insert _ _),
+          rw union_sdiff, rw ‹V \ U = V›, apply subset_union_right
+        },
+        have: (insert w ((B ∪ V) \ U) ∪ erase U w) \ erase V z ∈ 𝒜,
+          refine uncompressed_was_already_there _ _ _, 
+              rw is_compressed at xy_comp,
+              rwa xy_comp,
+            apply subset.trans (erase_subset _ _),
+            apply subset.trans _ (subset_insert _ _),
+            rw union_sdiff,
+            rw ‹V \ U = V›,
+            apply subset_union_right,
+          rw ← disjoint_iff_inter_eq_empty,
+          rw disjoint_insert_right,
+          split, apply not_mem_erase,
+          apply disjoint_of_subset_left (erase_subset _ _),
+          apply disjoint_sdiff,
+        have: (insert w ((B ∪ V) \ U) ∪ erase U w) \ erase V z = insert z B,
+        by calc (insert w ((B ∪ V) \ U) ∪ erase U w) \ erase V z = (finset.singleton w ∪ ((B ∪ V) \ U) ∪ erase U w) \ erase V z : begin congr, end
+        ... = (((B ∪ V) \ U) ∪ (finset.singleton w ∪ erase U w)) \ erase V z : begin rw [union_left_comm, union_assoc] end
+        ... = (((B ∪ V) \ U) ∪ U) \ erase V z : begin congr, rw union_singleton_eq_insert, rw insert_erase h end
+        ... = (B ∪ V) \ erase V z : begin rw sdiff_union_of_subset, apply subset.trans ‹U ⊆ B› (subset_union_left _ _) end
+        ... = B \ erase V z ∪ V \ erase V z : begin rw union_sdiff end
+        ... = B ∪ V \ erase V z : begin congr, conv {to_rhs, rw ← sdiff_union_inter B (erase V z)}, suffices: B ∩ erase V z = ∅, rw this, rw union_empty, rw ← disjoint_iff_inter_eq_empty, apply disjoint_of_subset_right (erase_subset _ _), rw disjoint_iff_inter_eq_empty, rwa inter_comm end
+        ... = B ∪ finset.singleton z : begin congr, ext, simp, split, intro p, by_contra, exact p.2 ‹_› p.1, intro p, rw p, tauto end
+        ... = insert z B : begin rw [union_comm, union_singleton_eq_insert] end,
+        rwa ← this,
+      have: w ∉ V,
+        intro, have: w ∈ B ∪ V := mem_union_right _ ‹_›,
+        exact a_h_w (mem_sdiff.2 ⟨‹_›, ‹_›⟩),
+      have: w ∉ B,
+        intro, have: w ∈ B ∪ V := mem_union_left _ ‹_›,
+        exact a_h_w (mem_sdiff.2 ⟨‹_›, ‹_›⟩),
+      apply m w this,
+      
+      have: (insert w ((B ∪ V) \ U) ∪ U) \ V ∈ 𝒜, 
+      refine uncompressed_was_already_there ‹insert w ((B ∪ V) \ U) ∈ 𝒜'› (trans _ (subset_insert _ _)) _,
+          rw union_sdiff,
+           rw ‹V \ U = V›,
+          apply subset_union_right,
+        rw ← disjoint_iff_inter_eq_empty,
+        rw disjoint_insert_right,
+        exact ⟨‹_›, disjoint_sdiff⟩,
+      suffices: insert w B = (insert w ((B ∪ V) \ U) ∪ U) \ V,
+        rwa this,
+      rw insert_union,
+      rw sdiff_union_of_subset (trans ‹U ⊆ B› (subset_union_left _ _)),
+      rw ← insert_union,
+      rw union_sdiff_self, 
+      conv {to_lhs, rw ← sdiff_union_inter (insert w B) V},
+      suffices: insert w B ∩ V = ∅,
+        rw this, rw union_empty, 
+      rw ← disjoint_iff_inter_eq_empty,
+      rw disjoint_insert_left,
+      split,
+        assumption,
+      rw disjoint_iff_inter_eq_empty, rwa inter_comm, 
+    set f := (λ B, (B ∪ V) \ U),
+    apply card_le_card_of_inj_on f (λ B HB, (q₁ B HB).2.2),
+    intros B₁ HB₁ B₂ HB₂ k,
+    exact inj_ish B₁ B₂ ⟨(q₁ B₁ HB₁).2.1, (q₁ B₁ HB₁).1⟩ ⟨(q₁ B₂ HB₂).2.1, (q₁ B₂ HB₂).1⟩ k
+  end
+end
+end UV
