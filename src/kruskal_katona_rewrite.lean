@@ -675,7 +675,7 @@ lemma union_sdiff_self {α : Type*} [decidable_eq α] (s t : finset α) : (s ∪
 lemma sdiff_singleton_eq_erase {α : Type*} [decidable_eq α] (a : α) (s : finset α) : s \ finset.singleton a = erase s a := begin ext, rw [mem_erase, mem_sdiff, mem_singleton], tauto end
 lemma union_singleton_eq_insert {α : Type*} [decidable_eq α] (a : α) (s : finset α) : finset.singleton a ∪ s = insert a s := begin ext, rw [mem_insert, mem_union, mem_singleton] end
 lemma sdiff_union {α : Type*} [decidable_eq α] (s t₁ t₂ : finset α) : s \ (t₁ ∪ t₂) = (s \ t₁) ∩ (s \ t₂) := by simp only [ext, mem_union, mem_sdiff, mem_inter]; tauto
-lemma not_sure {α : Type*} [decidable_eq α] (s t : finset α) (h : t ⊆ s) : s ∪ t = s := by simp only [ext, mem_union]; tauto
+lemma not_sure {α : Type*} [decidable_eq α] {s t : finset α} (h : t ⊆ s) : s ∪ t = s := by simp only [ext, mem_union]; tauto
 lemma new_thing {α : Type*} [decidable_eq α] {s t : finset α} : disjoint s t ↔ s \ t = s := 
 begin
   split; intro p,
@@ -684,14 +684,31 @@ begin
   rw ← p, apply sdiff_disjoint
 end
 lemma disjoint_self_iff_empty {α : Type*} [decidable_eq α] (s : finset α) : disjoint s s ↔ s = ∅ :=
-begin
-  split; intro p,
-    { rw [disjoint_iff_inter_eq_empty, inter_self] at p, assumption },
-  rw p, apply disjoint_empty_left,
-end
+disjoint_self
 
 instance decidable_disjoint (U V : finset X) : decidable (disjoint U V) := 
 dite (U ∩ V = ∅) (is_true ∘ disjoint_iff_inter_eq_empty.2) (is_false ∘ mt disjoint_iff_inter_eq_empty.1)
+
+lemma sum_lt_sum {α β : Type*} {s : finset α} {f g : α → β} [decidable_eq α] [ordered_cancel_comm_monoid β] : s ≠ ∅ → (∀x∈s, f x < g x) → s.sum f < s.sum g := 
+begin
+  apply finset.induction_on s,
+    intro a, exfalso, apply a, refl,
+  intros x s not_mem ih _ assump,
+  rw sum_insert not_mem, rw sum_insert not_mem,
+  apply lt_of_lt_of_le,
+    rw add_lt_add_iff_right (s.sum f),
+    apply assump x (mem_insert_self _ _),
+  rw add_le_add_iff_left,
+  by_cases (s = ∅),
+    rw h,
+    rw sum_empty,
+    rw sum_empty,
+  apply le_of_lt,
+  apply ih h,
+  intros x hx,
+  apply assump,
+  apply mem_insert_of_mem hx
+end
 
 namespace UV
 section 
@@ -812,7 +829,7 @@ section
         refine ⟨_, disjoint_sdiff, _⟩,
           have: disjoint U V := disjoint_of_subset_right h.2 h.1,
           rw union_sdiff, rw new_thing.1 this, apply subset_union_right _ _,
-        rwa [sdiff_union_of_subset, union_sdiff_self, new_thing.1 (disjoint.comm.1 h.1)],
+        rwa [sdiff_union_of_subset, union_sdiff_self, new_thing.1 h.1.symm],
         apply trans h.2 (subset_union_left _ _)},
       { rw HB at *, tauto } },
     tauto
@@ -861,47 +878,38 @@ section
     have q₁: ∀ B ∈ ∂𝒜' \ ∂𝒜, U ⊆ B ∧ disjoint V B ∧ (B ∪ V) \ U ∈ ∂𝒜 \ ∂𝒜',
       intros B HB,
       obtain ⟨k, k'⟩: B ∈ ∂𝒜' ∧ B ∉ ∂𝒜 := mem_sdiff.1 HB,
-      have m: ∀ y ∉ B, insert y B ∉ 𝒜,
-        intros y _ _,
-        apply k',
-        rw mem_shadow',
-        exact ⟨y, H, a⟩,
+      have m: ∀ y ∉ B, insert y B ∉ 𝒜 := λ y H a, k' (mem_shadow'.2 ⟨y, H, a⟩),
       rcases mem_shadow'.1 k with ⟨x, _, _⟩,
       have q := compress_moved ‹insert x B ∈ 𝒜'› (m _ ‹x ∉ B›),
       have: disjoint V B := (disjoint_insert_right.1 q.2.1).2,
       have: disjoint V U := disjoint_of_subset_right q.1 q.2.1,
       have: V \ U = V, rwa ← new_thing,
       have: x ∉ U,
-        intro, 
+        intro a, 
         rcases h₁ x ‹x ∈ U› with ⟨y, Hy, xy_comp⟩,
         apply m y (disjoint_left.1 ‹disjoint V B› Hy),
         rw is_compressed at xy_comp,
         have: (insert x B ∪ V) \ U ∈ compress_family (erase U x) (erase V y) 𝒜, rw xy_comp, exact q.2.2,
         have: ((insert x B ∪ V) \ U ∪ erase U x) \ erase V y ∈ 𝒜,
-          apply uncompressed_was_already_there this,
-            intros t tH, rw [mem_sdiff, mem_union], replace tH := mem_of_mem_erase tH,
-            split, right, assumption,
-            exact disjoint_left.1 ‹disjoint V U› tH,
-          apply disjoint_of_subset_left (erase_subset _ _) disjoint_sdiff,
+          apply uncompressed_was_already_there this _ (disjoint_of_subset_left (erase_subset _ _) disjoint_sdiff),
+            rw [union_sdiff, ‹V \ U = V›],
+            apply subset.trans (erase_subset _ _) (subset_union_right _ _), 
         suffices: ((insert x B ∪ V) \ U ∪ erase U x) \ erase V y = insert y B,
           rwa ← this,
         by calc (((insert x B ∪ V) \ U) ∪ erase U x) \ erase V y 
-                    = (((insert x B ∪ V) \ (finset.singleton x ∪ erase U x)) ∪ erase U x) \ erase V y : begin rw [union_singleton_eq_insert, insert_erase a] end
-                ... = ((((insert x B ∪ V) \ (finset.singleton x)) ∩ ((insert x B ∪ V) \ (erase U x))) ∪ erase U x) \ erase V y : begin rw [sdiff_union] end
-                ... = (((((insert x B ∪ V) \ (finset.singleton x)) ∪ erase U x) ∩ (((insert x B ∪ V) \ (erase U x)) ∪ erase U x))) \ erase V y : begin rw union_distrib_right end
-                ... = (((((insert x B ∪ V) \ (finset.singleton x)) ∪ erase U x) ∩ (((insert x B ∪ V))))) \ erase V y : begin rw sdiff_union_of_subset, refine trans (erase_subset _ _) (trans q.1 (subset_union_left _ _)) end
-                ... = (((((insert x (B ∪ V)) \ (finset.singleton x)) ∪ erase U x) ∩ (((insert x B ∪ V))))) \ erase V y : begin rw insert_union end
-                ... = ((((erase (insert x (B ∪ V)) x) ∪ erase U x) ∩ (((insert x B ∪ V))))) \ erase V y : begin rw sdiff_singleton_eq_erase end
-                ... = ((B ∪ V ∪ erase U x) ∩ (insert x B ∪ V)) \ erase V y : begin rw erase_insert, rw mem_union, exact (λ a_1, disjoint_left.1 ‹disjoint V U› (or.resolve_left a_1 ‹x ∉ B›) ‹x ∈ U›) end
-                ... = ((B ∪ erase U x ∪ V) ∩ (insert x B ∪ V)) \ erase V y : begin rw union_right_comm end
-                ... = ((B ∪ V) ∩ (insert x B ∪ V)) \ erase V y : begin congr, rw not_sure, rw ← subset_insert_iff, exact q.1 end
-                ... = ((B ∩ insert x B) ∪ V) \ erase V y : by rw union_distrib_right
-                ... = (B ∪ V) \ erase V y : begin rw inter_insert_of_not_mem h_w, rw inter_self end
-                ... = (B ∪ (finset.singleton y ∪ erase V y)) \ erase V y : begin congr, rw union_singleton_eq_insert, rw insert_erase Hy end
-                ... = (B ∪ finset.singleton y ∪ erase V y) \ erase V y : begin rw union_assoc end
-                ... = B ∪ finset.singleton y : begin rw union_sdiff_self, rw ← new_thing, rw union_comm, rw union_singleton_eq_insert, rw disjoint_insert_left, split, apply not_mem_erase, apply disjoint_of_subset_right (erase_subset _ _), rwa disjoint.comm,  end
-                ... = insert y B : begin rw [union_comm, union_singleton_eq_insert] end,
-      have: U ⊆ B := λ _ _, mem_of_mem_insert_of_ne (q.1 ‹_ ∈ U›) (λ _, by safe),
+            = (((insert x B ∪ V) \ finset.singleton x ∪ erase U x) ∩ ((insert x B ∪ V) \ erase U x ∪ erase U x)) \ erase V y : 
+                                  by rw [← union_distrib_right, ← sdiff_union, union_singleton_eq_insert, insert_erase a]
+        ... = (erase (insert x (B ∪ V)) x ∪ erase U x) ∩ (insert x B ∪ V) \ erase V y : 
+                                  by rw sdiff_union_of_subset (trans (erase_subset _ _) (trans q.1 (subset_union_left _ _))); rw insert_union; rw sdiff_singleton_eq_erase 
+        ... = (B ∪ erase U x ∪ V) ∩ (insert x B ∪ V) \ erase V y : 
+                                  begin rw erase_insert, rw union_right_comm, rw mem_union, exact (λ a_1, disjoint_left.1 ‹disjoint V U› (or.resolve_left a_1 ‹x ∉ B›) ‹x ∈ U›) end
+        ... = (B ∪ V) \ erase V y : 
+                                  by rw ← union_distrib_right; congr; rw [not_sure (subset_insert_iff.1 q.1), inter_insert_of_not_mem ‹x ∉ B›, inter_self]
+        ... = (insert y B ∪ erase V y) \ erase V y :  
+                                  by rw [← union_singleton_eq_insert, union_comm _ B, union_assoc, union_singleton_eq_insert, insert_erase ‹y ∈ V›]
+        ... = insert y B : 
+                                  begin rw [union_sdiff_self, ← new_thing, disjoint_insert_left], refine ⟨not_mem_erase _ _, disjoint_of_subset_right (erase_subset _ _) ‹disjoint V B›.symm⟩ end,
+      have: U ⊆ B, rw [← erase_eq_of_not_mem ‹x ∉ U›, ← subset_insert_iff], exact q.1,
       refine ⟨‹_›, ‹_›, _⟩,
       rw mem_sdiff,
       have: x ∉ V := disjoint_right.1 q.2.1 (mem_insert_self _ _),
@@ -947,7 +955,7 @@ section
         ... = (((B ∪ V) \ U) ∪ U) \ erase V z : begin congr, rw union_singleton_eq_insert, rw insert_erase h end
         ... = (B ∪ V) \ erase V z : begin rw sdiff_union_of_subset, apply subset.trans ‹U ⊆ B› (subset_union_left _ _) end
         ... = B \ erase V z ∪ V \ erase V z : begin rw union_sdiff end
-        ... = B ∪ V \ erase V z : begin congr, rw ← new_thing, apply disjoint_of_subset_right (erase_subset _ _), rwa disjoint.comm end
+        ... = B ∪ V \ erase V z : begin congr, rw ← new_thing, apply disjoint_of_subset_right (erase_subset _ _) ‹disjoint V B›.symm end
         ... = B ∪ finset.singleton z : begin congr, ext, simp, split, intro p, by_contra, exact p.2 ‹_› p.1, intro p, rw p, tauto end
         ... = insert z B : begin rw [union_comm, union_singleton_eq_insert] end,
         rwa ← this,
@@ -984,6 +992,72 @@ section
     apply card_le_card_of_inj_on f (λ B HB, (q₁ B HB).2.2),
     intros B₁ HB₁ B₂ HB₂ k,
     exact inj_ish B₁ B₂ ⟨(q₁ B₁ HB₁).2.1, (q₁ B₁ HB₁).1⟩ ⟨(q₁ B₂ HB₂).2.1, (q₁ B₂ HB₂).1⟩ k
+  end
+
+  def binary (A : finset X) : ℕ := A.sum (λ x, 2^(x.val))
+
+  def measure (𝒜 : finset (finset X)) : ℕ := 𝒜.sum binary
+
+  def compression_reduces_binary (U V : finset X) (hU : U ≠ ∅) (hV : V ≠ ∅) (A : finset X) (h : max' U hU < max' V hV) : compress U V A ≠ A → binary (compress U V A) < binary A :=
+  begin
+    intro a,
+    rw compress at a ⊢,
+    split_ifs at a ⊢,
+      rw binary,
+      rw binary,
+      rw ← add_lt_add_iff_right,
+
+      have q : V ⊆ (A ∪ U) := trans h_1.2 (subset_union_left _ _),
+      rw sum_sdiff q,
+      rw sum_union h_1.1.symm,
+      rw add_lt_add_iff_left,
+      set kV := (max' V hV).1,
+      set kU := (max' U hU).1,
+      have: 2^kV ≤ sum V (λ (x : fin n), 2 ^ x.val), sorry,
+      have: sum U (λ (x : fin n), 2 ^ x.val) < 2^(kU+1), sorry,
+      have: kU + 1 ≤ kV, sorry,
+      apply lt_of_lt_of_le,
+      assumption,
+      transitivity (2^kV),
+        rwa nat.pow_le_iff_le_right (le_refl 2),
+      assumption,
+    exfalso, apply a, refl
+  end
+
+  def compression_reduces_measure (U V : finset X) (hU : U ≠ ∅) (hV : V ≠ ∅) (𝒜 : finset (finset X)) (h : max' U hU < max' V hV) : compress_family U V 𝒜 ≠ 𝒜 → measure (compress_family U V 𝒜) < measure 𝒜 :=
+  begin
+    rw [compress_family], 
+    intro, 
+    rw measure, rw measure,
+    rw sum_union (compress_disjoint U V),
+    conv {to_rhs, rw ← @filter_union_filter_neg_eq _ (λ A, C A ∈ 𝒜) _ _ 𝒜, rw sum_union (disjoint_iff_inter_eq_empty.2 (filter_inter_filter_neg_eq _)) },
+    rw [add_comm, add_lt_add_iff_left],
+    rw sum_image,
+      apply sum_lt_sum,
+        intro,
+        rw [compress_motion, compress_remains, a_1, image_empty, empty_union] at a,
+        apply a,
+        conv {to_rhs, rw ← @filter_union_filter_neg_eq _ (λ A, C A ∈ 𝒜) _ _ 𝒜}, conv {to_lhs, rw ← union_empty (filter _ 𝒜)},
+        symmetry,
+        rw ← a_1,
+      intros A HA,
+      apply compression_reduces_binary, exact h,
+      rw mem_filter at HA,
+      intro, rw a_1 at HA,
+      tauto,
+    intros x Hx y Hy k,
+    rw mem_filter at Hx Hy,
+    have cx: compress U V x ≠ x,
+      intro b, rw b at Hx, tauto,
+    have cy: compress U V y ≠ y,
+      intro b, rw b at Hy, tauto,
+    rw compress at k Hx cx,
+    split_ifs at k Hx cx,
+      rw compress at k Hy cy,
+      split_ifs at k Hy cy,
+        apply inj_ish x y h_1 h_2 k,
+      tauto,
+    tauto,
   end
 end
 end UV
