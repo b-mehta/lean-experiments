@@ -1,3 +1,4 @@
+import algebra.geom_sum
 import data.finset
 import data.fintype
 import data.list
@@ -756,8 +757,38 @@ section
     exact ⟨q, ⟨r.1, r.2.symm ▸ p⟩, r.2⟩, 
   end
 
+  def is_compressed (𝒜 : finset (finset X)) : Prop := CC 𝒜 = 𝒜
+
+  lemma is_compressed_empty (𝒜 : finset (finset X)) : is_compressed ∅ ∅ 𝒜 := 
+  begin
+    have q: ∀ (A : finset X), compress ∅ ∅ A = A,
+      simp [compress],
+    rw [is_compressed, compress_family], 
+    ext, rw mem_union, rw mem_compress_remains, rw mem_compress_motion,
+    repeat {conv in (compress ∅ ∅ _) {rw q _}},
+    safe
+  end
+
   lemma mem_compress {A : finset X} : A ∈ CC 𝒜 ↔ (A ∉ 𝒜 ∧ (∃ B ∈ 𝒜, C B = A)) ∨ (A ∈ 𝒜 ∧ C A ∈ 𝒜) :=
   by rw [compress_family, mem_union, mem_compress_motion, mem_compress_remains]
+
+  lemma compress_family_idempotent (𝒜 : finset (finset X)) : CC (CC 𝒜) = CC 𝒜 :=
+  begin
+    have: ∀ A ∈ compress_family U V 𝒜, compress U V A ∈ compress_family U V 𝒜,
+      intros A HA,
+      rw mem_compress at HA ⊢,
+      rw [compress_idem, and_self],
+      rcases HA with ⟨_, B, _, cB_eq_A⟩ | ⟨_, _⟩,
+        left, rw ← cB_eq_A, refine ⟨_, B, ‹_›, _⟩; rw compress_idem,
+        rwa cB_eq_A,
+      right, assumption,
+    have: filter (λ A, compress U V A ∉ compress_family U V 𝒜) (compress_family U V 𝒜) = ∅,
+      rw ← filter_false (compress_family U V 𝒜),
+      apply filter_congr,
+      simpa,
+    rw [compress_family, compress_remains, this, image_empty, union_comm, compress_motion, ← this],
+    apply filter_union_filter_neg_eq (compress_family U V 𝒜)
+  end
 
   lemma compress_disjoint (U V : finset X) : disjoint (compress_remains U V 𝒜) (compress_motion U V 𝒜) :=
   begin
@@ -860,8 +891,6 @@ section
       split_ifs at cA_in_A,
       assumption }
   end
-
-  def is_compressed (U V : finset X) (𝒜 : finset (finset X)) : Prop := compress_family U V 𝒜 = 𝒜
 
   lemma compression_reduces_shadow (h₁ : ∀ x ∈ U, ∃ y ∈ V, is_compressed (erase U x) (erase V y) 𝒜) (h₂ : U.card = V.card) : 
     (∂ CC 𝒜).card ≤ (∂𝒜).card := 
@@ -994,41 +1023,51 @@ section
     exact inj_ish B₁ B₂ ⟨(q₁ B₁ HB₁).2.1, (q₁ B₁ HB₁).1⟩ ⟨(q₁ B₂ HB₂).2.1, (q₁ B₂ HB₂).1⟩ k
   end
 
-  def binary (A : finset X) : ℕ := A.sum (λ x, 2^(x.val))
+  def binary (A : finset X) : ℕ := A.sum (λ x, pow 2 x.val)
 
-  def measure (𝒜 : finset (finset X)) : ℕ := 𝒜.sum binary
+  def c_measure (𝒜 : finset (finset X)) : ℕ := 𝒜.sum binary
 
   def compression_reduces_binary (U V : finset X) (hU : U ≠ ∅) (hV : V ≠ ∅) (A : finset X) (h : max' U hU < max' V hV) : compress U V A ≠ A → binary (compress U V A) < binary A :=
   begin
     intro a,
     rw compress at a ⊢,
     split_ifs at a ⊢,
-      rw binary,
+    { rw binary,
       rw binary,
       rw ← add_lt_add_iff_right,
-
-      have q : V ⊆ (A ∪ U) := trans h_1.2 (subset_union_left _ _),
-      rw sum_sdiff q,
+        have q : V ⊆ (A ∪ U) := trans h_1.2 (subset_union_left _ _),
+        rw sum_sdiff q,
       rw sum_union h_1.1.symm,
       rw add_lt_add_iff_left,
       set kV := (max' V hV).1,
       set kU := (max' U hU).1,
-      have: 2^kV ≤ sum V (λ (x : fin n), 2 ^ x.val), sorry,
-      have: sum U (λ (x : fin n), 2 ^ x.val) < 2^(kU+1), sorry,
-      have: kU + 1 ≤ kV, sorry,
+      have: 2^kV ≤ sum V (λ (x : fin n), pow 2 x.val) := @single_le_sum _ _ V (λ x, pow 2 x.val) _ _ (λ t _, zero_le _) _ (max'_mem V hV),
+      have: sum U (λ (x : fin n), 2 ^ x.val) < 2^(kU+1), 
+        {
+          have r := geom_sum_mul_add 1 (kU + 1),
+          have p: sum (range (kU + 1)) (pow 2) + 1 = pow 2 (kU + 1),
+            simp only [nat.pow_eq_pow, geom_series, mul_one] at r, assumption,
+          set f: fin n ↪ ℕ := ⟨λ x, x.val, by rintros ⟨x1, _⟩ ⟨x2, _⟩ k; congr; exact k⟩,
+          have s := sum_map U f (pow 2),
+          dsimp at s, rw [← s, ← p, nat.lt_succ_iff], apply sum_le_sum_of_subset, 
+          intro x, rw mem_map, rintros ⟨y, _, hy⟩,
+          rw [mem_range, ← hy, nat.lt_succ_iff], apply le_max' U hU y ‹y ∈ U›
+        },
+      have: kU + 1 ≤ kV, 
+        exact h,
       apply lt_of_lt_of_le,
-      assumption,
+          assumption,
       transitivity (2^kV),
         rwa nat.pow_le_iff_le_right (le_refl 2),
-      assumption,
-    exfalso, apply a, refl
+      assumption },
+    { exfalso, apply a, refl }
   end
 
-  def compression_reduces_measure (U V : finset X) (hU : U ≠ ∅) (hV : V ≠ ∅) (𝒜 : finset (finset X)) (h : max' U hU < max' V hV) : compress_family U V 𝒜 ≠ 𝒜 → measure (compress_family U V 𝒜) < measure 𝒜 :=
+  def compression_reduces_measure (U V : finset X) (hU : U ≠ ∅) (hV : V ≠ ∅) (h : max' U hU < max' V hV) (𝒜 : finset (finset X)) : compress_family U V 𝒜 ≠ 𝒜 → c_measure (compress_family U V 𝒜) < c_measure 𝒜 :=
   begin
     rw [compress_family], 
     intro, 
-    rw measure, rw measure,
+    rw c_measure, rw c_measure,
     rw sum_union (compress_disjoint U V),
     conv {to_rhs, rw ← @filter_union_filter_neg_eq _ (λ A, C A ∈ 𝒜) _ _ 𝒜, rw sum_union (disjoint_iff_inter_eq_empty.2 (filter_inter_filter_neg_eq _)) },
     rw [add_comm, add_lt_add_iff_left],
@@ -1058,6 +1097,56 @@ section
         apply inj_ish x y h_1 h_2 k,
       tauto,
     tauto,
+  end
+
+  def gamma : rel (finset X) (finset X) := (λ U V, ∃ (HU : U ≠ ∅), ∃ (HV : V ≠ ∅), disjoint U V ∧ finset.card U = finset.card V ∧ max' U HU < max' V HV)
+
+  lemma compression_improved (U V : finset X) (𝒜 : finset (finset X)) (h₁ : gamma U V) 
+    (h₂ : ∀ U₁ V₁, gamma U₁ V₁ ∧ U₁.card < U.card → is_compressed U₁ V₁ 𝒜) (h₃ : ¬ is_compressed U V 𝒜): 
+    c_measure (compress_family U V 𝒜) < c_measure 𝒜 ∧ (compress_family U V 𝒜).card = 𝒜.card ∧ (∂ compress_family U V 𝒜).card ≤ (∂𝒜).card := 
+  begin
+    rcases h₁ with ⟨Uh, Vh, UVd, same_size, max_lt⟩,
+    refine ⟨compression_reduces_measure U V Uh Vh max_lt _ h₃, compressed_size _ _, _⟩,
+    apply compression_reduces_shadow U V _ same_size,
+    intros x Hx, refine ⟨min' V Vh, min'_mem _ _, _⟩,
+    by_cases (2 ≤ U.card),
+    { apply h₂,
+      refine ⟨⟨_, _, _, _, _⟩, card_erase_lt_of_mem Hx⟩,
+      { rwa [← card_pos, card_erase_of_mem Hx, nat.lt_pred_iff] },
+      { rwa [← card_pos, card_erase_of_mem (min'_mem _ _), ← same_size, nat.lt_pred_iff] },
+      { apply disjoint_of_subset_left (erase_subset _ _), apply disjoint_of_subset_right (erase_subset _ _), assumption },
+      { rw [card_erase_of_mem (min'_mem _ _), card_erase_of_mem Hx, same_size] },
+      { apply @lt_of_le_of_lt _ _ _ (max' U Uh),
+          apply max'_le,
+          intros y Hy,
+          apply le_max',
+          apply mem_of_mem_erase Hy,
+        apply lt_of_lt_of_le max_lt,
+        apply le_max',
+        rw mem_erase,
+        refine ⟨_, max'_mem _ _⟩,
+        intro,
+        rw same_size at h,
+        apply not_le_of_gt h,
+        apply le_of_eq,
+        rw card_eq_one,
+        use max' V Vh,
+        rw eq_singleton_iff_unique_mem,
+        refine ⟨max'_mem _ _, λ t Ht, _⟩,
+        apply le_antisymm,
+          apply le_max' _ _ _ Ht,
+        rw a, apply min'_le _ _ _ Ht
+      } 
+    },
+    rw ← card_pos at Uh,
+    replace h: card U = 1 := le_antisymm (le_of_not_gt h) Uh,
+    rw h at same_size,
+    have: erase U x = ∅,
+      rw [← card_eq_zero, card_erase_of_mem Hx, h], refl,
+    have: erase V (min' V Vh) = ∅,
+      rw [← card_eq_zero, card_erase_of_mem (min'_mem _ _), ← same_size], refl,
+    rw [‹erase U x = ∅›, ‹erase V (min' V Vh) = ∅›],
+    apply is_compressed_empty
   end
 end
 end UV
