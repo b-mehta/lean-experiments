@@ -22,8 +22,6 @@ def c_measure (𝒜 : finset (finset X)) : ℕ := sorry
 
 lemma compress_family_idempotent (U V : finset X) (𝒜 : finset (finset X)) : is_compressed U V (compress_family U V 𝒜) := sorry
 
-lemma compress_family_idempotent (U V : finset X) (𝒜 : finset (finset X)) : is_compressed U V (compress_family U V 𝒜) := sorry
-
 def gamma : rel (finset X) (finset X) := (λ U V, ∃ (HU : U ≠ ∅), ∃ (HV : V ≠ ∅), disjoint U V ∧ finset.card U = finset.card V ∧ max' U HU < max' V HV)
 
 lemma compression_improved (U V : finset X) (𝒜 : finset (finset X)) (h₁ : gamma U V) 
