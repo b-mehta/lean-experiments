@@ -7,8 +7,6 @@ import tactic
 open fintype
 open finset
 
--- variables {X : Type*}
--- variables [fintype X] [decidable_eq X]
 variables {n : ℕ}
 local notation `X` := fin n
 variables {𝒜 : finset (finset X)}
@@ -55,40 +53,35 @@ section layers
 end layers
 
 section shadow
-  def all_removals (A : finset X) : finset (finset X) :=
-  A.attach.map ⟨λ i, erase A i.1, 
-  begin
-    rintro ⟨x1, x1p⟩ ⟨x2, x2p⟩ _,
-    congr, dsimp at a,
-    have: x1 ∉ erase A x1 := not_mem_erase _ _,
-    finish [a, mem_erase],
-  end
-  ⟩
+  def all_removals (A : finset X) : finset (finset X) := A.image (erase A)
 
   lemma all_removals_size {A : finset X} {r : ℕ} (h : A.card = r) : is_layer (all_removals A) (r-1) := 
   begin
-    intros _ H,
-    rw [all_removals, mem_map] at H,
-    rcases H with ⟨⟨_, p⟩, _, k⟩,
-    dsimp at k,
-    rw [← k, card_erase_of_mem p, ‹A.card = r›],
-    refl
+    intros B H,
+    rw [all_removals, mem_image] at H,
+    rcases H with ⟨i, ih, Bh⟩,
+    rw [← Bh, card_erase_of_mem ih, h], refl
   end
 
   def mem_all_removals {A : finset X} {B : finset X} : B ∈ all_removals A ↔ ∃ i ∈ A, erase A i = B :=
-  by simp [all_removals, mem_map]
+  by simp only [all_removals, mem_image]
 
-  lemma card_all_removals {A : finset X} {r : ℕ} {H : card A = r} : (all_removals A).card = r :=
-  by rw [all_removals, card_map, card_attach, H]
+  lemma card_all_removals {A : finset X} {r : ℕ} (H : card A = r) : (all_removals A).card = r :=
+  begin
+    rwa [all_removals, card_image_of_inj_on],
+    intros i ih j _ k,
+    have q: i ∉ erase A j := k ▸ not_mem_erase i A,
+    rw [mem_erase, not_and] at q,
+    by_contra a, apply q a ih
+  end
 
-  def shadow (𝒜 : finset (finset X)) : finset (finset X) := 
-  𝒜.bind all_removals
+  def shadow (𝒜 : finset (finset X)) : finset (finset X) := 𝒜.bind all_removals
 
   reserve prefix `∂`:90
   notation ∂𝒜 := shadow 𝒜
 
   def mem_shadow (B : finset X) : B ∈ shadow 𝒜 ↔ ∃ A ∈ 𝒜, ∃ i ∈ A, erase A i = B := 
-  by simp [shadow, all_removals]
+  by simp only [shadow, all_removals, mem_bind, mem_image]
 
   def mem_shadow' {B : finset X} : B ∈ shadow 𝒜 ↔ ∃ j ∉ B, insert j B ∈ 𝒜 :=
   begin
@@ -108,7 +101,7 @@ section shadow
     intros a A H,
     rw [shadow, mem_bind] at H,
     rcases H with ⟨B, _, _⟩,
-    refine all_removals_size (a _ ‹_›) _ ‹A ∈ all_removals B›,
+    exact all_removals_size (a _ ‹_›) _ ‹A ∈ all_removals B›,
   end
 
   def sub_of_shadow {B : finset X} : B ∈ ∂𝒜 → ∃ A ∈ 𝒜, B ⊆ A :=
@@ -116,11 +109,12 @@ section shadow
     intro k,
     rw mem_shadow at k,
     rcases k with ⟨A, H, _, _, k⟩,
-    use A, use H,
     rw ← k,
-    apply erase_subset
+    exact ⟨A, H, erase_subset _ _⟩
   end
 end shadow
+
+#eval shadow example1
 
 section local_lym
   lemma multiply_out {A B n r : ℕ} (hr1 : 1 ≤ r) (hr2 : r ≤ n)
@@ -139,60 +133,43 @@ section local_lym
   end
 
   def the_pairs (𝒜 : finset (finset X)) : finset (finset X × finset X) :=
-  𝒜.bind $ λ A, (all_removals A).map ⟨λ x, (A,x), λ _ _, by simp⟩
+  𝒜.bind (λ A, (all_removals A).image (prod.mk A))
 
   lemma card_the_pairs {r : ℕ} (𝒜 : finset (finset X)) : is_layer 𝒜 r → (the_pairs 𝒜).card = 𝒜.card * r :=
   begin
-    intro,
-    rw [the_pairs, card_bind],
-    transitivity,
-        apply (sum_congr rfl _),
-          intro, exact r,
-        intros,
-        rw [card_map, card_all_removals],
-        refine (a _ H),
-      rw [← nat.smul_eq_mul, ← sum_const],
-    intros,
-    rw disjoint_iff_ne, finish
+    intro, rw [the_pairs, card_bind],
+    { convert (sum_congr rfl _),
+      { rw [← nat.smul_eq_mul, ← sum_const] }, 
+      intros,
+      rw [card_image_of_inj_on, card_all_removals (a _ H)],
+      exact (λ _ _ _ _ k, (prod.mk.inj k).2) },
+    simp only [disjoint_left, mem_image],
+    rintros _ _ _ _ k a ⟨_, _, a₁⟩ ⟨_, _, a₂⟩,
+    exact k (prod.mk.inj (a₁.trans a₂.symm)).1,
   end
 
   def from_below (𝒜 : finset (finset X)) : finset (finset X × finset X) :=
-  (∂𝒜).bind (λ B, (univ \ B).attach.map ⟨λ x, (insert x.1 B, B), 
-  begin
-    rintros ⟨x1, x1h⟩ ⟨x2, x2h⟩ h,
-    injection h, congr,
-    have q := mem_insert_self x1 B,
-    rw [h_1, mem_insert] at q,
-    rw mem_sdiff at x1h,
-    tauto
-  end
-  ⟩)
+  (∂𝒜).bind (λ B, (univ \ B).image (λ x, (insert x B, B)))
 
   lemma mem_the_pairs (A B : finset X) : (A,B) ∈ the_pairs 𝒜 ↔ A ∈ 𝒜 ∧ B ∈ all_removals A :=
   begin
-    rw [the_pairs, mem_bind],
-    split; intro h,
-      rcases h with ⟨a, Ha, h⟩,
-      rw mem_map at h,
-      rcases h with ⟨b, Hb, h⟩,
-      injection h with Ah Bh,
-      rw [Ah, Bh] at *,
-      exact ⟨Ha, Hb⟩,
-    refine ⟨A, h.1, _⟩,
-    rw mem_map,
-    tauto
+    simp only [the_pairs, mem_bind, mem_image],
+    split, 
+    { rintro ⟨a, Ha, b, Hb, h⟩, 
+      rw [(prod.mk.inj h).1, (prod.mk.inj h).2] at *,
+      exact ⟨Ha, Hb⟩ },
+    { intro h, exact ⟨A, h.1, B, h.2, rfl⟩}
   end
 
   lemma mem_from_below (A B : finset X) : A ∈ 𝒜 ∧ (∃ (i ∉ B), insert i B = A) → (A,B) ∈ from_below 𝒜 :=
   begin
-    intro,
     rw [from_below, mem_bind],
-    rcases a with ⟨Ah, i, ih, a⟩,
+    rintro ⟨Ah, i, ih, a⟩,
     refine ⟨B, _, _⟩,
       rw mem_shadow',
       refine ⟨i, ih, a.symm ▸ Ah⟩,
-    rw mem_map,
-    refine ⟨⟨i, mem_sdiff.2 ⟨complete _, ih⟩⟩, mem_attach _ _, by simpa⟩
+    rw mem_image,
+    refine ⟨i, mem_sdiff.2 ⟨complete _, ih⟩, by rw a⟩,
   end
 
   lemma above_sub_below (𝒜 : finset (finset X)) : the_pairs 𝒜 ⊆ from_below 𝒜 :=
@@ -210,13 +187,15 @@ section local_lym
   begin
     intro,
     rw [from_below],
-    transitivity,
-      apply card_bind_le,
-    apply le_of_eq,
+    convert card_bind_le,
     rw [← nat.smul_eq_mul, ← sum_const],
     apply sum_congr rfl,
     intros, 
-    rw [card_map, card_attach, card_sdiff (subset_univ _), card_univ, card_fin, shadow_layer a _ H]
+    rw [card_image_of_inj_on, card_sdiff (subset_univ _), card_univ, card_fin, shadow_layer a _ H],
+    intros x1 x1h _ _ h,
+    have q := mem_insert_self x1 x, 
+    rw [(prod.mk.inj h).1, mem_insert] at q,
+    apply or.resolve_right q ((mem_sdiff.1 x1h).2),
   end
 
   theorem local_lym {r : ℕ} (hr1 : r ≥ 1) (hr2 : r ≤ n) (H : is_layer 𝒜 r):
@@ -240,20 +219,11 @@ section slice
   lemma mem_slice {r : ℕ} {A : finset X} : A ∈ 𝒜#r ↔ A ∈ 𝒜 ∧ A.card = r :=
   by rw [slice, mem_filter]
 
-  lemma layered_slice (𝒜 : finset (finset X)) (r : ℕ) : is_layer (𝒜#r) r :=
-  begin
-    intros A,
-    rw mem_slice,
-    tauto
-  end
+  lemma layered_slice {𝒜 : finset (finset X)} {r : ℕ} : is_layer (𝒜#r) r := λ _ h, (mem_slice.1 h).2
 
   lemma ne_of_diff_slice {r₁ r₂ : ℕ} {A₁ A₂ : finset X} (h₁ : A₁ ∈ 𝒜#r₁) (h₂ : A₂ ∈ 𝒜#r₂) : r₁ ≠ r₂ → A₁ ≠ A₂ :=
-  begin
-    intros A' r,
-    rw r at *,
-    rw mem_slice at h₁ h₂,
-    rw h₁.2 at h₂, tauto
-  end
+  mt (λ h, (layered_slice A₁ h₁).symm.trans ((congr_arg card h).trans (layered_slice A₂ h₂)))
+
 end slice
 
 section lym
@@ -319,34 +289,21 @@ section lym
     apply local_lym (nat.le_sub_left_of_add_le hk) (nat.sub_le _ _) (decompose'_layer _ _)
   end
 
-  def decompose (𝒜 : finset (finset X)) (r : ℕ) : finset (finset X) :=
-  decompose' 𝒜 (n-r)
-
-  def decompose_layer (𝒜 : finset (finset X)) (r : ℕ) (hr : r ≤ n) : is_layer (decompose 𝒜 r) r :=
-  begin
-    rw decompose,
-    have := decompose'_layer 𝒜 (n-r),
-    rwa nat.sub_sub_self hr at this
-  end
-
   lemma sum_flip {α : Type*} [add_comm_monoid α] {n : ℕ} (f : ℕ → α) : sum (range (n+1)) (λ r, f (n - r)) = sum (range (n+1)) (λ r, f r) :=
   begin
     induction n with n ih,
       rw [sum_range_one, sum_range_one],
     rw sum_range_succ',
     rw sum_range_succ _ (nat.succ n),
-    simp [ih]
+    simp [ih],
   end
 
   lemma card_decompose_other (H : antichain 𝒜) : 
-    (range (n+1)).sum (λ r, ((𝒜#r).card : ℚ) / nat.choose n r) ≤ (decompose 𝒜 0).card / nat.choose n 0 :=
+    (range (n+1)).sum (λ r, ((𝒜#r).card : ℚ) / nat.choose n r) ≤ (decompose' 𝒜 n).card / nat.choose n 0 :=
   begin
-    rw [decompose, nat.sub_zero, ← nat.sub_self],
-    by calc 
-      (range (n + 1)).sum (λ r, ((𝒜#r).card : ℚ) / nat.choose n r) 
-            = (range (n + 1)).sum (λ r, ((𝒜#(n-r)).card : ℚ) / nat.choose n (n-r)) 
-                                              : by rw sum_flip (λ r, ((𝒜#r).card : ℚ) / nat.choose n r)
-        ... ≤ ((decompose' 𝒜 n).card : ℚ) / nat.choose n (n-n) : card_decompose'_other (le_refl _) H
+    rw [← nat.sub_self n],
+    convert ← card_decompose'_other (le_refl n) H using 1,
+    apply sum_flip (λ r, ((𝒜#r).card : ℚ) / nat.choose n r), 
   end
 
   lemma lubell_yamamoto_meshalkin (H : antichain 𝒜) : (range (n+1)).sum (λ r, ((𝒜#r).card : ℚ) / nat.choose n r) ≤ 1 :=
@@ -354,8 +311,7 @@ section lym
     transitivity,
       apply card_decompose_other H,
     rw div_le_iff; norm_cast,
-      rw decompose,
-      simpa using size_in_layer (decompose'_layer 𝒜 n),
+      simpa only [card_fin, mul_one, nat.choose_zero_right, nat.sub_self] using size_in_layer (decompose'_layer 𝒜 n),
     apply nat.choose_pos (zero_le n)
   end
 end lym
@@ -443,8 +399,8 @@ end
 lemma sdiff_union_inter {α : Type*} [decidable_eq α] (A B : finset α) : (A \ B) ∪ (A ∩ B) = A :=
 by simp only [ext, mem_union, mem_sdiff, mem_inter]; tauto
 
-lemma sdiff_inter_inter {α : Type*} [decidable_eq α] (A B : finset α) : (A \ B) ∩ (A ∩ B) = ∅ :=
-by simp only [ext, mem_inter, mem_sdiff, not_mem_empty]; tauto
+lemma sdiff_inter_inter {α : Type*} [decidable_eq α] (A B : finset α) : disjoint (A \ B) (A ∩ B) := disjoint_of_subset_right (inter_subset_right _ _) sdiff_disjoint
+-- by simp only [ext, mem_inter, mem_sdiff, not_mem_empty]; tauto
 
 namespace ij
 section 
@@ -602,8 +558,7 @@ section
         rwa [sdiff_union_inter, sdiff_union_inter] at z,
       rw [card_disjoint_union, card_disjoint_union, inter_comm],
       apply add_le_add_right ‹_›,
-      any_goals { rw disjoint_iff_inter_eq_empty,
-                  apply sdiff_inter_inter },
+      any_goals { apply sdiff_inter_inter },
 
     have q₁: ∀ B ∈ ∂𝒜' \ ∂𝒜, i ∈ B ∧ j ∉ B ∧ erase (insert j B) i ∈ ∂𝒜 \ ∂𝒜',
       intros B HB,
@@ -687,6 +642,8 @@ end
 lemma disjoint_self_iff_empty {α : Type*} [decidable_eq α] (s : finset α) : disjoint s s ↔ s = ∅ :=
 disjoint_self
 
+lemma sdiff_subset_left {α : Type*} [decidable_eq α] (s t : finset α) : s \ t ⊆ s := by have := sdiff_subset_sdiff (le_refl s) (empty_subset t); rwa sdiff_empty at this
+
 instance decidable_disjoint (U V : finset X) : decidable (disjoint U V) := 
 dite (U ∩ V = ∅) (is_true ∘ disjoint_iff_inter_eq_empty.2) (is_false ∘ mt disjoint_iff_inter_eq_empty.1)
 
@@ -722,6 +679,14 @@ section
     else A
 
   local notation `C` := compress U V
+
+  lemma compress_size (A : finset X) (h₁ : disjoint U V) (h₂ : U.card = V.card) : (C A).card = A.card :=
+  begin
+    rw compress, split_ifs, 
+    rw card_sdiff (subset.trans h.2 (subset_union_left _ _)), 
+    rw card_disjoint_union h.1.symm, rw h₂, apply nat.add_sub_cancel, 
+    refl
+  end
 
   lemma compress_idem (A : finset X) : C (C A) = C A :=
   begin
@@ -771,6 +736,15 @@ section
 
   lemma mem_compress {A : finset X} : A ∈ CC 𝒜 ↔ (A ∉ 𝒜 ∧ (∃ B ∈ 𝒜, C B = A)) ∨ (A ∈ 𝒜 ∧ C A ∈ 𝒜) :=
   by rw [compress_family, mem_union, mem_compress_motion, mem_compress_remains]
+
+  lemma compress_family_size (r : ℕ) (𝒜 : finset (finset X)) (h₁ : disjoint U V) (h₂ : U.card = V.card) (h₃ : is_layer 𝒜 r) : is_layer (CC 𝒜) r :=
+  begin
+    intros A HA,
+    rw mem_compress at HA, 
+    rcases HA with ⟨_, _, z₁, z₂⟩ | ⟨z₁, _⟩,
+      rw ← z₂, rw compress_size _ _ _ h₁ h₂, 
+    all_goals {apply h₃ _ z₁}
+  end
 
   lemma compress_family_idempotent (𝒜 : finset (finset X)) : CC (CC 𝒜) = CC 𝒜 :=
   begin
@@ -901,8 +875,7 @@ section
         rwa [sdiff_union_inter, sdiff_union_inter] at z,
       rw [card_disjoint_union, card_disjoint_union, inter_comm],
       apply add_le_add_right ‹_›,
-      any_goals { rw disjoint_iff_inter_eq_empty,
-                  apply sdiff_inter_inter },
+      any_goals { apply sdiff_inter_inter },
     
     have q₁: ∀ B ∈ ∂𝒜' \ ∂𝒜, U ⊆ B ∧ disjoint V B ∧ (B ∪ V) \ U ∈ ∂𝒜 \ ∂𝒜',
       intros B HB,
@@ -1023,17 +996,75 @@ section
     exact inj_ish B₁ B₂ ⟨(q₁ B₁ HB₁).2.1, (q₁ B₁ HB₁).1⟩ ⟨(q₁ B₂ HB₂).2.1, (q₁ B₂ HB₂).1⟩ k
   end
 
-  def binary (A : finset X) : ℕ := A.sum (λ x, pow 2 x.val)
+  def bin_measure (A : finset X) : ℕ := A.sum (λ x, pow 2 x.val)
 
-  def c_measure (𝒜 : finset (finset X)) : ℕ := 𝒜.sum binary
+  lemma binary_sum (k : ℕ) (A : finset ℕ) (h₁ : ∀ x ∈ A, x < k) : A.sum (pow 2) < 2^k :=
+  begin
+    apply lt_of_le_of_lt (sum_le_sum_of_subset (λ t th, mem_range.2 (h₁ t th))),
+    have z := geom_sum_mul_add 1 k, rw [geom_series, mul_one] at z, 
+    simp only [nat.pow_eq_pow] at z, rw ← z, apply nat.lt_succ_self
+  end
 
-  def compression_reduces_binary (U V : finset X) (hU : U ≠ ∅) (hV : V ≠ ∅) (A : finset X) (h : max' U hU < max' V hV) : compress U V A ≠ A → binary (compress U V A) < binary A :=
+  lemma binary_sum' (k : ℕ) (A : finset X) (h₁ : ∀ (x : X), x ∈ A → x.val < k) : bin_measure A < 2^k :=
+  begin
+    suffices: bin_measure A = (A.image (λ (x : X), x.val)).sum (pow 2),
+      rw this, apply binary_sum, intros t th, rw mem_image at th, rcases th with ⟨_, _, _⟩,
+      rw ← th_h_h, apply h₁ _ th_h_w, 
+    rw [bin_measure, sum_image], intros x _ y _, exact fin.eq_of_veq,
+  end
+
+  lemma bin_measure_inj (A B : finset X) : bin_measure A = bin_measure B → A = B :=
+  begin
+    intro, set differ := (elems X).filter (λ x, ¬ (x ∈ A ↔ x ∈ B)),
+    by_cases h: (differ = ∅),
+      ext a, by_contra z, have: differ ≠ ∅ := ne_empty_of_mem (mem_filter.2 ⟨complete _, z⟩), 
+      exact this h,
+    set k := max' differ h,
+    have el: (k ∈ A ∧ k ∉ B) ∨ (k ∉ A ∧ k ∈ B),
+      have := max'_mem differ h, rw mem_filter at this, tauto,
+    exfalso,
+    have AeqB: A.filter (λ x, ¬(x ≤ k)) = B.filter (λ x, ¬(x ≤ k)),
+    { ext t, rw [mem_filter, mem_filter], 
+      by_cases h: (t > k),
+        simp [h], by_contra z, refine not_le_of_gt h (le_max' _ _ _ _), rw mem_filter,
+        exact ⟨complete _, ‹_›⟩, 
+      simp [h] },
+    rcases el with ⟨inA, notinB⟩ | ⟨notinA, inB⟩,
+    { have Blt: (B.filter (λ x, x ≤ k)).sum (λ x, pow 2 x.val) < pow 2 k.1,
+        rw ← bin_measure, apply binary_sum', intro t, rw mem_filter, intro b, 
+        cases lt_or_eq_of_le b.2, exact h_1, rw h_1 at b, exfalso, exact notinB b.1,
+      have leA: pow 2 k.1 ≤ (A.filter (λ x, x ≤ k)).sum (λ x, pow 2 x.val),
+        apply @single_le_sum _ _ (A.filter (λ x, x ≤ k)) (λ (x : fin n), 2 ^ x.val) _ _ (λ x _, zero_le _) k,
+        rw mem_filter, exact ⟨inA, le_refl _⟩, 
+      have BltA: (B.filter (λ x, x ≤ k)).sum (λ x, pow 2 x.val) < (A.filter (λ x, x ≤ k)).sum (λ x, pow 2 x.val) := lt_of_lt_of_le Blt leA,
+      have := nat.add_lt_add_right BltA (sum (filter (λ (x : fin n), ¬(x ≤ k)) B) (λ (x : fin n), 2 ^ x.val)), 
+      rw [← sum_union, filter_union_filter_neg_eq, ← AeqB, ← sum_union, filter_union_filter_neg_eq, ← bin_measure, ← bin_measure] at this,
+      apply not_lt_of_ge (le_of_eq a) this, 
+      rw disjoint_iff_inter_eq_empty, apply filter_inter_filter_neg_eq,
+      rw disjoint_iff_inter_eq_empty, apply filter_inter_filter_neg_eq },
+    { have Alt: (A.filter (λ x, x ≤ k)).sum (λ x, pow 2 x.val) < pow 2 k.1,
+        rw ← bin_measure, apply binary_sum', intro t, rw mem_filter, intro b, 
+        cases lt_or_eq_of_le b.2, exact h_1, rw h_1 at b, exfalso, exact notinA b.1,
+      have leB: pow 2 k.1 ≤ (B.filter (λ x, x ≤ k)).sum (λ x, pow 2 x.val),
+        apply @single_le_sum _ _ (B.filter (λ x, x ≤ k)) (λ (x : fin n), 2 ^ x.val) _ _ (λ x _, zero_le _) k,
+        rw mem_filter, exact ⟨inB, le_refl _⟩, 
+      have AltB: (A.filter (λ x, x ≤ k)).sum (λ x, pow 2 x.val) < (B.filter (λ x, x ≤ k)).sum (λ x, pow 2 x.val) := lt_of_lt_of_le Alt leB,
+      have := nat.add_lt_add_right AltB (sum (filter (λ (x : fin n), ¬(x ≤ k)) A) (λ (x : fin n), 2 ^ x.val)), 
+      rw [← sum_union, filter_union_filter_neg_eq, AeqB, ← sum_union, filter_union_filter_neg_eq, ← bin_measure, ← bin_measure] at this,
+      apply not_lt_of_ge (ge_of_eq a) this, 
+      rw disjoint_iff_inter_eq_empty, apply filter_inter_filter_neg_eq,
+      rw disjoint_iff_inter_eq_empty, apply filter_inter_filter_neg_eq }
+  end
+
+  def c_measure (𝒜 : finset (finset X)) : ℕ := 𝒜.sum bin_measure
+
+  lemma compression_reduces_bin_measure (U V : finset X) (hU : U ≠ ∅) (hV : V ≠ ∅) (A : finset X) (h : max' U hU < max' V hV) : compress U V A ≠ A → bin_measure (compress U V A) < bin_measure A :=
   begin
     intro a,
     rw compress at a ⊢,
     split_ifs at a ⊢,
-    { rw binary,
-      rw binary,
+    { rw bin_measure,
+      rw bin_measure,
       rw ← add_lt_add_iff_right,
         have q : V ⊆ (A ∪ U) := trans h_1.2 (subset_union_left _ _),
         rw sum_sdiff q,
@@ -1044,14 +1075,7 @@ section
       have: 2^kV ≤ sum V (λ (x : fin n), pow 2 x.val) := @single_le_sum _ _ V (λ x, pow 2 x.val) _ _ (λ t _, zero_le _) _ (max'_mem V hV),
       have: sum U (λ (x : fin n), 2 ^ x.val) < 2^(kU+1), 
         {
-          have r := geom_sum_mul_add 1 (kU + 1),
-          have p: sum (range (kU + 1)) (pow 2) + 1 = pow 2 (kU + 1),
-            simp only [nat.pow_eq_pow, geom_series, mul_one] at r, assumption,
-          set f: fin n ↪ ℕ := ⟨λ x, x.val, by rintros ⟨x1, _⟩ ⟨x2, _⟩ k; congr; exact k⟩,
-          have s := sum_map U f (pow 2),
-          dsimp at s, rw [← s, ← p, nat.lt_succ_iff], apply sum_le_sum_of_subset, 
-          intro x, rw mem_map, rintros ⟨y, _, hy⟩,
-          rw [mem_range, ← hy, nat.lt_succ_iff], apply le_max' U hU y ‹y ∈ U›
+          rw ← bin_measure, apply binary_sum', intros x hx, rw nat.lt_succ_iff, apply le_max' U _ _ hx, 
         },
       have: kU + 1 ≤ kV, 
         exact h,
@@ -1080,7 +1104,7 @@ section
         symmetry,
         rw ← a_1,
       intros A HA,
-      apply compression_reduces_binary, exact h,
+      apply compression_reduces_bin_measure, exact h,
       rw mem_filter at HA,
       intro, rw a_1 at HA,
       tauto,
@@ -1109,18 +1133,15 @@ section
     refine ⟨compression_reduces_measure U V Uh Vh max_lt _ h₃, compressed_size _ _, _⟩,
     apply compression_reduces_shadow U V _ same_size,
     intros x Hx, refine ⟨min' V Vh, min'_mem _ _, _⟩,
-    by_cases (2 ≤ U.card),
+    by_cases h: (2 ≤ U.card),
     { apply h₂,
       refine ⟨⟨_, _, _, _, _⟩, card_erase_lt_of_mem Hx⟩,
       { rwa [← card_pos, card_erase_of_mem Hx, nat.lt_pred_iff] },
       { rwa [← card_pos, card_erase_of_mem (min'_mem _ _), ← same_size, nat.lt_pred_iff] },
       { apply disjoint_of_subset_left (erase_subset _ _), apply disjoint_of_subset_right (erase_subset _ _), assumption },
       { rw [card_erase_of_mem (min'_mem _ _), card_erase_of_mem Hx, same_size] },
-      { apply @lt_of_le_of_lt _ _ _ (max' U Uh),
-          apply max'_le,
-          intros y Hy,
-          apply le_max',
-          apply mem_of_mem_erase Hy,
+      { have: max' (erase U _) _ ≤ max' U Uh := max'_le _ _ _ (λ y Hy, le_max' _ Uh _ (mem_of_mem_erase Hy)),
+        apply lt_of_le_of_lt this,
         apply lt_of_lt_of_le max_lt,
         apply le_max',
         rw mem_erase,
@@ -1135,9 +1156,7 @@ section
         refine ⟨max'_mem _ _, λ t Ht, _⟩,
         apply le_antisymm,
           apply le_max' _ _ _ Ht,
-        rw a, apply min'_le _ _ _ Ht
-      } 
-    },
+        rw a, apply min'_le _ _ _ Ht } },
     rw ← card_pos at Uh,
     replace h: card U = 1 := le_antisymm (le_of_not_gt h) Uh,
     rw h at same_size,
@@ -1148,5 +1167,207 @@ section
     rw [‹erase U x = ∅›, ‹erase V (min' V Vh) = ∅›],
     apply is_compressed_empty
   end
+
+  instance thing (U V : finset X) : decidable (gamma U V) := by rw gamma; apply_instance
+  instance thing2 (U V : finset X) (A : finset (finset X)) : decidable (is_compressed U V A) := by rw is_compressed; apply_instance
+
+  lemma kruskal_katona_helper (r : ℕ) (𝒜 : finset (finset X)) (h : is_layer 𝒜 r) : 
+    ∃ (ℬ : finset (finset X)), (∂ℬ).card ≤ (∂𝒜).card ∧ 𝒜.card = ℬ.card ∧ is_layer ℬ r ∧ (∀ U V, gamma U V → is_compressed U V ℬ) := 
+  begin
+    refine @well_founded.recursion _ _ (measure_wf c_measure) (λ (A : finset (finset X)), is_layer A r → ∃ B, (∂B).card ≤ (∂A).card ∧ A.card = B.card ∧ is_layer B r ∧ ∀ (U V : finset X), gamma U V → is_compressed U V B) _ _ h,
+    intros A ih z,
+    set usable: finset (finset X × finset X) := filter (λ t, gamma t.1 t.2 ∧ ¬ is_compressed t.1 t.2 A) ((powerset (elems X)).product (powerset (elems X))), 
+    by_cases (usable = ∅),
+      refine ⟨A, le_refl _, rfl, z, _⟩, intros U V k,
+      rw eq_empty_iff_forall_not_mem at h,
+      by_contra,
+      apply h ⟨U,V⟩,
+      simp [a, k], exact ⟨subset_univ _, subset_univ _⟩,
+    rcases exists_min usable (λ t, t.1.card) ((nonempty_iff_ne_empty _).2 h) with ⟨⟨U,V⟩, uvh, t⟩, rw mem_filter at uvh,
+    have h₂: ∀ U₁ V₁, gamma U₁ V₁ ∧ U₁.card < U.card → is_compressed U₁ V₁ A,
+      intros U₁ V₁ h, by_contra, 
+      apply not_le_of_gt h.2 (t ⟨U₁, V₁⟩ _),
+      simp [h, a], exact ⟨subset_univ _, subset_univ _⟩,
+    have p := compression_improved U V A uvh.2.1 h₂ uvh.2.2, 
+    rw [measure, inv_image] at ih, 
+    rcases ih (compress_family U V A) p.1 _ with ⟨B, q1, q2, q3, q4⟩,
+    exact ⟨B, trans q1 p.2.2, trans p.2.1.symm q2, q3, q4⟩, 
+    rcases uvh.2.1 with ⟨_, _, c, d, e⟩,
+    exact compress_family_size U V r A c d z, 
+  end
+
+  def binary : finset X → finset X → Prop := inv_image (<) bin_measure
+  local infix ` ≺ `:50 := binary
+
+  instance : is_trichotomous (finset X) binary := ⟨
+    begin
+      intros A B,
+      rcases lt_trichotomy (bin_measure A) (bin_measure B) with lt|eq|gt,
+      { left, exact lt },
+      { right, left, exact bin_measure_inj A B eq },
+      { right, right, exact gt }
+    end
+  ⟩
+
+  def is_init_seg_of_colex (𝒜 : finset (finset X)) (r : ℕ) : Prop := is_layer 𝒜 r ∧ (∀ A ∈ 𝒜, ∀ B, B ≺ A ∧ B.card = r → B ∈ 𝒜)
+
+  lemma init_seg_total (𝒜₁ 𝒜₂ : finset (finset X)) (r : ℕ) (h₁ : is_init_seg_of_colex 𝒜₁ r) (h₂ : is_init_seg_of_colex 𝒜₂ r) : 𝒜₁ ⊆ 𝒜₂ ∨ 𝒜₂ ⊆ 𝒜₁ :=
+  begin
+    rw ← sdiff_eq_empty_iff_subset, rw ← sdiff_eq_empty_iff_subset,
+    by_contra a, rw not_or_distrib at a, simp [exists_mem_iff_ne_empty.symm, exists_mem_iff_ne_empty.symm] at a,
+    rcases a with ⟨⟨A, Ah₁, Ah₂⟩, ⟨B, Bh₁, Bh₂⟩⟩,
+    rcases trichotomous_of binary A B with lt | eq | gt,
+      { exact Ah₂ (h₂.2 B Bh₁ A ⟨lt, h₁.1 A Ah₁⟩) },
+      { rw eq at Ah₁, exact Bh₂ Ah₁ },
+      { exact Bh₂ (h₁.2 A Ah₁ B ⟨gt, h₂.1 B Bh₁⟩) },
+  end
+
+  lemma init_seg_of_compressed (ℬ : finset (finset X)) (r : ℕ) (h₁ : is_layer ℬ r) (h₂ : ∀ U V, gamma U V → is_compressed U V ℬ): 
+    is_init_seg_of_colex ℬ r := 
+  begin
+    refine ⟨h₁, _⟩,
+    rintros B Bh A ⟨A_lt_B, sizeA⟩,
+    by_contra a,
+    set U := A \ B,
+    set V := B \ A,
+    have: A ≠ B, intro t, rw t at a, exact a Bh,
+    have: disjoint U B ∧ V ⊆ B := ⟨sdiff_disjoint, sdiff_subset_left _ _⟩,
+    have: disjoint V A ∧ U ⊆ A := ⟨sdiff_disjoint, sdiff_subset_left _ _⟩,
+    have cB_eq_A: compress U V B = A,
+    { rw compress, split_ifs, rw [union_sdiff_self_eq_union, union_sdiff, new_thing.1 disjoint_sdiff, union_comm], 
+      apply not_sure,
+      intro t, simp only [and_imp, not_and, mem_sdiff, not_not], exact (λ x y, y x) },
+    have cA_eq_B: compress V U A = B,
+    { rw compress, split_ifs, rw [union_sdiff_self_eq_union, union_sdiff, new_thing.1 disjoint_sdiff, union_comm], 
+      apply not_sure,
+      intro t, simp only [and_imp, not_and, mem_sdiff, not_not], exact (λ x y, y x) },
+    have: card A = card B := trans sizeA (h₁ B Bh).symm,
+    have hU: U ≠ ∅,
+      { intro t, rw sdiff_eq_empty_iff_subset at t, have: A = B := eq_of_subset_of_card_le t (ge_of_eq ‹_›), rw this at a, exact a Bh },
+    have hV: V ≠ ∅,
+      { intro t, rw sdiff_eq_empty_iff_subset at t, have: B = A := eq_of_subset_of_card_le t (le_of_eq ‹_›), rw ← this at a, exact a Bh },
+    have disj: disjoint U V,
+      { exact disjoint_of_subset_left (sdiff_subset_left _ _) disjoint_sdiff },
+    have smaller: max' U hU < max' V hV,
+      { rcases lt_trichotomy (max' U hU) (max' V hV) with lt | eq | gt,
+        { assumption },
+        { exfalso, have: max' U hU ∈ U := max'_mem _ _, apply disjoint_left.1 disj this, rw eq, exact max'_mem _ _ },
+        { exfalso, have z := compression_reduces_bin_measure V U hV hU A gt, rw cA_eq_B at z,
+          apply irrefl (bin_measure B) (trans (z ‹A ≠ B›.symm) A_lt_B)
+        },
+      },
+    have: gamma U V,
+    { refine ⟨hU, hV, disj, _, smaller⟩,
+      have: card (A \ B ∪ A ∩ B) = card (B \ A ∪ B ∩ A),
+        rwa [sdiff_union_inter, sdiff_union_inter],
+      rwa [card_disjoint_union (sdiff_inter_inter _ _), card_disjoint_union (sdiff_inter_inter _ _), inter_comm, add_right_inj] at this
+    },
+    have Bcomp := h₂ U V this, rw is_compressed at Bcomp,
+    suffices: compress U V B ∈ compress_family U V ℬ,
+      rw [Bcomp, cB_eq_A] at this, exact a this,
+    rw mem_compress, left, refine ⟨_, B, Bh, rfl⟩, rwa cB_eq_A, 
+  end
+
+
 end
 end UV
+
+lemma exists_max {α β : Type*} [decidable_linear_order α] (s : finset β) (f : β → α)
+  (h : s ≠ ∅) : ∃ x ∈ s, ∀ x' ∈ s, f x' ≤ f x :=
+begin
+  have : s.image f ≠ ∅,
+    rwa [ne, image_eq_empty, ← ne.def],
+  cases max_of_ne_empty this with y hy,
+  rcases mem_image.mp (mem_of_max hy) with ⟨x, hx, rfl⟩,
+  exact ⟨x, hx, λ x' hx', le_max_of_mem (mem_image_of_mem f hx') hy⟩,
+end
+
+section KK
+  theorem kruskal_katona (r : ℕ) (𝒜 𝒞 : finset (finset X)) : 
+    is_layer 𝒜 r ∧ is_layer 𝒞 r ∧ 𝒜.card = 𝒞.card ∧ UV.is_init_seg_of_colex 𝒞 r 
+  → (∂𝒞).card ≤ (∂𝒜).card :=
+  begin
+    rintros ⟨layerA, layerC, h₃, h₄⟩,
+    rcases UV.kruskal_katona_helper r 𝒜 layerA with ⟨ℬ, _, t, layerB, fully_comp⟩,
+    have: UV.is_init_seg_of_colex ℬ r := UV.init_seg_of_compressed ℬ r layerB fully_comp,
+    suffices: 𝒞 = ℬ,
+      rwa this at *,
+    have z: card ℬ = card 𝒞 := t.symm.trans h₃,
+    cases UV.init_seg_total ℬ 𝒞 r this h₄ with BC CB,
+      symmetry, apply eq_of_subset_of_card_le BC (ge_of_eq z),
+    apply eq_of_subset_of_card_le CB (le_of_eq z)
+  end
+
+  theorem lovasz_form {r k : ℕ} {𝒜 : finset (finset X)} (hr1 : r ≥ 1) (hkn : k ≤ n) (hrk : r ≤ k) (h₁ : is_layer 𝒜 r) (h₂ : 𝒜.card = nat.choose k r) : 
+    (∂𝒜).card ≥ nat.choose k (r-1) :=
+  begin
+    set range'k : finset X := attach_fin (range k) (λ m, by rw mem_range; apply forall_lt_iff_le.2 hkn),
+    set 𝒞 : finset (finset X) := powerset_len r (range'k),
+    have: 𝒞.card = nat.choose k r,
+      rw [card_powerset_len, card_attach_fin, card_range], 
+    have: is_layer 𝒞 r, intros A HA, rw mem_powerset_len at HA, exact HA.2,
+    suffices: (∂𝒞).card = nat.choose k (r-1),
+    { rw ← this, apply kruskal_katona r _ _ ⟨h₁, ‹is_layer 𝒞 r›, _, _⟩, 
+      rw h₂, symmetry, assumption,
+      refine ⟨‹_›, _⟩, rintros A HA B ⟨HB₁, HB₂⟩, 
+      rw mem_powerset_len, refine ⟨_, ‹_›⟩, 
+      intros t th, rw mem_attach_fin, rw mem_range, 
+      by_contra, simp at a, 
+      rw [UV.binary, inv_image] at HB₁,
+      apply not_le_of_gt HB₁, 
+      transitivity 2^k,
+        apply le_of_lt, 
+        apply UV.binary_sum',
+        intros x hx, rw mem_powerset_len at HA, exact mem_range.1 ((mem_attach_fin _).1 (HA.1 hx)), 
+      have: (λ (x : X), 2^x.val) t ≤ _ := single_le_sum _ th, 
+        transitivity, apply nat.pow_le_pow_of_le_right zero_lt_two a, rwa UV.bin_measure,
+      intros _ _, apply zero_le },
+    suffices: ∂𝒞 = powerset_len (r-1) (range'k),
+      rw [this, card_powerset_len, card_attach_fin, card_range], 
+    ext A, rw mem_powerset_len, split,
+      rw mem_shadow, rintro ⟨B, Bh, i, ih, BA⟩,
+      refine ⟨_, _⟩; rw ← BA; rw mem_powerset_len at Bh,
+        intro j, rw mem_erase, intro a,
+        exact Bh.1 a.2, 
+      rw [card_erase_of_mem ih, Bh.2], refl,
+    rintro ⟨_, _⟩,
+    rw mem_shadow', 
+    suffices: ∃ j, j ∈ range'k \ A,
+      rcases this with ⟨j,jp⟩, rw mem_sdiff at jp,
+      use j, use jp.2, rw mem_powerset_len, split, 
+        intros t th, rw mem_insert at th, cases th, 
+          rw th, exact jp.1,
+        exact a_left th,
+      rw [card_insert_of_not_mem jp.2, a_right, nat.sub_add_cancel hr1],
+    apply exists_mem_of_ne_empty,
+    rw ← card_pos,
+    rw card_sdiff a_left, rw card_attach_fin, apply nat.lt_sub_left_of_add_lt, 
+    rw [card_range, a_right, add_zero], rw nat.sub_lt_right_iff_lt_add hr1, 
+    apply nat.lt_succ_of_le hrk, 
+  end
+end KK
+
+def intersecting (𝒜 : finset (finset X)) : Prop := ∀ A ∈ 𝒜, ∀ B ∈ 𝒜, ¬ disjoint A B
+
+theorem intersecting_all {hn : n ≥ 1} (h : intersecting 𝒜) : 𝒜.card ≤ 2^(n-1) :=
+begin
+  set f : finset X → finset (finset X) := λ A, insert (univ \ A) (finset.singleton A),
+  have disjs: ∀ x ∈ 𝒜, ∀ y ∈ 𝒜, x ≠ y → disjoint (f x) (f y),
+    intros A hA B hB k,
+    simp [not_or_distrib, and_assoc], refine ⟨_, _, _, _⟩,
+      { intro z, apply k, ext a, simp [ext] at z, replace z := z a, tauto },
+      intro, rw ← a at hA, apply h _ hB _ hA disjoint_sdiff, 
+      intro, rw ← a at hB, apply h _ hB _ hA sdiff_disjoint, 
+      exact k.symm, 
+  have: 𝒜.bind f ⊆ powerset univ,
+    intros A hA, rw mem_powerset, apply subset_univ,
+  have q := card_le_of_subset this, rw [card_powerset, card_univ, card_fin] at q, 
+  rw card_bind disjs at q, dsimp at q,
+  have: (λ (u : finset (fin n)), card (f u)) =  (λ _, 2),
+    funext, rw card_insert_of_not_mem, rw card_singleton, rw mem_singleton, 
+    intro, simp [ext] at a, apply a, exact ⟨0, hn⟩,
+  rw this at q, rw sum_const at q, rw nat.smul_eq_mul at q, 
+  rw ← nat.le_div_iff_mul_le' zero_lt_two at q, 
+  conv_rhs at q {rw ← nat.sub_add_cancel hn},
+  rw nat.pow_add at q, simp at q, assumption
+end
